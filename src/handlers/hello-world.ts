@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { ContextPlugin } from "../types";
 
 /**
  * NOTICE: Remove this file or use it as a template for your own plugins.
@@ -10,7 +10,7 @@ import { Context } from "../types";
  *
  * Logger examples are provided to show how to log different types of data.
  */
-export async function helloWorld(context: Context) {
+export async function helloWorld(context: ContextPlugin) {
   const {
     logger,
     payload,

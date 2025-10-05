@@ -1,4 +1,4 @@
-import { Context } from "./context";
+import { ContextPlugin } from "./context";
 
 /**
  * Typeguards are most helpful when you have a union type, and you want to narrow it down to a specific one.
@@ -9,6 +9,6 @@ import { Context } from "./context";
 /**
  * Restricts the scope of `context` to the `issue_comment.created` payload.
  */
-export function isCommentEvent(context: Context): context is Context {
-  return context.eventName === "issue_comment.created" || context.eventName === "pull_request_review_comment.created";
+export function isIssueUnassignedEvent(context: ContextPlugin): context is ContextPlugin {
+  return context.eventName === "issues.unassigned";
 }

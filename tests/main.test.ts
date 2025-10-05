@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
 import { Env } from "../src/types";
-import { Context } from "../src/types/context";
+import { ContextPlugin } from "../src/types/context";
 import { db } from "./__mocks__/db";
 import { createComment, setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
@@ -101,12 +101,12 @@ function createContext(
   commentId: number = 1,
   issueOne: number = 1
 ) {
-  const repo = db.repo.findFirst({ where: { id: { equals: repoId } } }) as unknown as Context["payload"]["repository"];
-  const sender = db.users.findFirst({ where: { id: { equals: payloadSenderId } } }) as unknown as Context["payload"]["sender"];
-  const issue1 = db.issue.findFirst({ where: { id: { equals: issueOne } } }) as unknown as Context<"issue_comment.created">["payload"]["issue"];
+  const repo = db.repo.findFirst({ where: { id: { equals: repoId } } }) as unknown as ContextPlugin["payload"]["repository"];
+  const sender = db.users.findFirst({ where: { id: { equals: payloadSenderId } } }) as unknown as ContextPlugin["payload"]["sender"];
+  const issue1 = db.issue.findFirst({ where: { id: { equals: issueOne } } }) as unknown as ContextPlugin<"issue_comment.created">["payload"]["issue"];
 
   createComment(commentBody, commentId); // create it first then pull it from the DB and feed it to _createContext
-  const comment = db.issueComments.findFirst({ where: { id: { equals: commentId } } }) as unknown as Context["payload"]["comment"];
+  const comment = db.issueComments.findFirst({ where: { id: { equals: commentId } } }) as unknown as ContextPlugin["payload"]["comment"];
 
   const context = createContextInner(repo, sender, issue1, comment, configurableResponse);
   const infoSpy = jest.spyOn(context.logger, "info");
@@ -133,10 +133,10 @@ function createContext(
  * This should represent the active `SupportedEvents` payload for any given event.
  */
 function createContextInner(
-  repo: Context["payload"]["repository"],
-  sender: Context["payload"]["sender"],
-  issue: Context<"issue_comment.created">["payload"]["issue"],
-  comment: Context["payload"]["comment"],
+  repo: ContextPlugin["payload"]["repository"],
+  sender: ContextPlugin["payload"]["sender"],
+  issue: ContextPlugin<"issue_comment.created">["payload"]["issue"],
+  comment: ContextPlugin["payload"]["comment"],
   configurableResponse: string
 ) {
   return {
@@ -148,8 +148,8 @@ function createContextInner(
       repository: repo,
       issue: issue,
       comment: comment,
-      installation: { id: 1 } as Context["payload"]["installation"],
-      organization: { login: STRINGS.USER_1 } as Context["payload"]["organization"],
+      installation: { id: 1 } as ContextPlugin["payload"]["installation"],
+      organization: { login: STRINGS.USER_1 } as ContextPlugin["payload"]["organization"],
     },
     logger: new Logs("debug"),
     config: {
@@ -158,5 +158,5 @@ function createContextInner(
     env: {} as Env,
     octokit: octokit,
     commentHandler: new CommentHandler(),
-  } as unknown as Context;
+  } as unknown as ContextPlugin;
 }
