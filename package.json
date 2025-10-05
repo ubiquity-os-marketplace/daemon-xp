@@ -21,7 +21,7 @@
     "knip": "knip --config .github/knip.ts",
     "knip-ci": "knip --no-exit-code --reporter json --config .github/knip.ts",
     "test": "cross-env NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --setupFiles dotenv/config --coverage",
-    "worker": "wrangler dev --env dev --port 4000",
+    "dev": "bun run --port 4000 --no-clear-screen --watch src/worker.ts",
     "prepare": "husky"
   },
   "keywords": [

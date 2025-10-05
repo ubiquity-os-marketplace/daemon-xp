@@ -1,6 +1,7 @@
 {
   "name": "ts-template",
   "description": "ts-template for UbiquityOS plugins.",
+  "ubiquity:listeners": ["issues.assigned", "issues.unassigned"],
   "commands": {
     "hello": {
       "ubiquity:example": "/hello argument",
