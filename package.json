@@ -1,7 +1,7 @@
 {
-  "name": "plugin-template",
+  "name": "@ubiquity-os/daemon-xp",
   "version": "1.0.0",
-  "description": "Ubiquibot plugin template repository with TypeScript support.",
+  "description": "Handles XP for users.",
   "author": "Ubiquity DAO",
   "license": "MIT",
   "main": "src/worker.ts",
@@ -34,13 +34,13 @@
     "open-source"
   ],
   "dependencies": {
-    "@sinclair/typebox": "0.34.15",
-    "@supabase/supabase-js": "^2.58.0",
+    "@sinclair/typebox": "0.34.41",
+    "@supabase/supabase-js": "^2.74.0",
     "@ubiquity-os/plugin-sdk": "3.3.0",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
     "decimal.js": "^10.6.0",
     "ethers": "^6.15.0",
-    "hono": "^4.6.19",
+    "hono": "^4.9.10",
     "ts-node": "^10.9.2"
   },
   "devDependencies": {
