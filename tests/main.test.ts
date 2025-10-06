@@ -1,12 +1,13 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { drop } from "@mswjs/data";
+import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import dotenv from "dotenv";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
 import * as adaptersModule from "../src/adapters";
-import { ContextPlugin, Env, SaveXpRecordInput, SupabaseAdapterContract } from "../src/types";
+import { ContextPlugin, Env, SaveXpRecordInput, SupabaseAdapterContract, UserXpTotal } from "../src/types";
 import { db } from "./__mocks__/db";
 import { createTimelineEvent, setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
@@ -94,6 +95,64 @@ describe("Plugin tests", () => {
     expect(supabase.calls).toHaveLength(0);
     adaptersSpy.mockRestore();
   });
+
+  it("Should post the sender's XP when the /xp command is used without arguments", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, 42.5, 2);
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp", commenterId });
+    const adaptersSpy = jest
+      .spyOn(adaptersModule, "createAdapters")
+      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("42.5 XP");
+    adaptersSpy.mockRestore();
+  });
+
+  it("Should post XP for the requested username when provided", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const targetUser = db.users.create({ id: 99, name: "Requested User", login: "requested-user" });
+    supabase.setUserTotal(targetUser.id, 17.25, 3);
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user" });
+    const adaptersSpy = jest
+      .spyOn(adaptersModule, "createAdapters")
+      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body?.startsWith("@requested-user currently has 17.25 XP.")).toBe(true);
+    adaptersSpy.mockRestore();
+  });
+
+  it("Should reply with no data when the requested user does not exist", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp missing-user" });
+    const adaptersSpy = jest
+      .spyOn(adaptersModule, "createAdapters")
+      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).not.toHaveBeenCalled();
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body?.startsWith("I don't have XP data for @missing-user yet.")).toBe(true);
+    adaptersSpy.mockRestore();
+  });
 });
 
 /**
@@ -169,10 +228,11 @@ function createUnassignedContext(options: {
       SUPABASE_KEY: "test-key",
     } as Env,
     octokit: octokit,
+    commentHandler: new CommentHandler(),
     adapters: {
       supabase: supabaseAdapter,
     },
-  } as unknown as ContextPlugin;
+  } as unknown as ContextPlugin<"issues.unassigned">;
   const infoSpy = jest.spyOn(context.logger, "info");
   const errorSpy = jest.spyOn(context.logger, "error");
   const okSpy = jest.spyOn(context.logger, "ok");
@@ -185,8 +245,69 @@ function createUnassignedContext(options: {
   };
 }
 
+function createIssueCommentContext(
+  options: {
+    supabaseAdapter?: SupabaseAdapterStub;
+    commentBody?: string;
+    commenterId?: number;
+    commentId?: number;
+  } = {}
+) {
+  const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
+  const repoRecord = db.repo.findFirst({ where: { id: { equals: 1 } } });
+  const issueRecord = db.issue.findFirst({ where: { id: { equals: 1 } } });
+  const commenterRecord = db.users.findFirst({ where: { id: { equals: options.commenterId ?? 1 } } });
+  if (!repoRecord || !issueRecord || !commenterRecord) {
+    throw new Error("Test fixtures missing required records for issue comment context");
+  }
+  const repo = repoRecord as unknown as ContextPlugin["payload"]["repository"];
+  const issue = issueRecord as unknown as ContextPlugin<"issue_comment.created">["payload"]["issue"];
+  const sender = {
+    ...commenterRecord,
+    type: "User",
+  } as unknown as ContextPlugin["payload"]["sender"];
+  const comment = {
+    id: options.commentId ?? Date.now(),
+    body: options.commentBody ?? "/xp",
+    user: {
+      login: commenterRecord.login,
+      id: commenterRecord.id,
+      type: "User",
+    },
+  } as ContextPlugin<"issue_comment.created">["payload"]["comment"];
+  const context = {
+    eventName: "issue_comment.created",
+    command: null,
+    payload: {
+      action: "created",
+      comment,
+      issue,
+      repository: repo,
+      sender,
+      installation: { id: 1 } as ContextPlugin["payload"]["installation"],
+      organization: { login: repo.owner.login } as ContextPlugin["payload"]["organization"],
+    },
+    logger: new Logs("debug"),
+    config: {},
+    env: {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env,
+    octokit: octokit,
+    commentHandler: new CommentHandler(),
+    adapters: {
+      supabase: supabaseAdapter,
+    },
+  } as unknown as ContextPlugin<"issue_comment.created">;
+  return {
+    context,
+    supabaseAdapter,
+  };
+}
+
 class SupabaseAdapterStub implements SupabaseAdapterContract {
   calls: SaveXpRecordInput[] = [];
+  private readonly _xpTotals = new Map<number, UserXpTotal>();
 
   location = {
     getOrCreateIssueLocation: jest.fn(async () => 1),
@@ -196,5 +317,10 @@ class SupabaseAdapterStub implements SupabaseAdapterContract {
     saveRecord: jest.fn(async (input: SaveXpRecordInput) => {
       this.calls.push(input);
     }),
+    getUserTotal: jest.fn(async (userId: number) => this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 }),
   };
+
+  setUserTotal(userId: number, total: number, permitCount = 1) {
+    this._xpTotals.set(userId, { total, permitCount });
+  }
 }

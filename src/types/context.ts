@@ -8,7 +8,7 @@ import { SupabaseAdapterContract } from "./supabase";
  *
  * ubiquity:listeners: ["issue_comment.created", ...]
  */
-export type SupportedEvents = "issues.unassigned";
+export type SupportedEvents = "issues.unassigned" | "issue_comment.created" | "pull_request_review_comment.created" | "pull_request_review.submitted";
 
 export type ContextPlugin<T extends SupportedEvents = SupportedEvents> = PluginContext<PluginSettings, Env, null, T> & {
   adapters: {

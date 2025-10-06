@@ -23,9 +23,13 @@ export const handlers = [
     HttpResponse.json(db.issueTimelineEvent.findMany({ where: { issue_number: { equals: Number(issueNumber) } } }) ?? [])
   ),
   // get user
-  http.get("https://api.github.com/users/:username", ({ params: { username } }) =>
-    HttpResponse.json(db.users.findFirst({ where: { login: { equals: username as string } } }))
-  ),
+  http.get("https://api.github.com/users/:username", ({ params: { username } }) => {
+    const user = db.users.findFirst({ where: { login: { equals: username as string } } });
+    if (!user) {
+      return new HttpResponse(null, { status: 404 });
+    }
+    return HttpResponse.json(user);
+  }),
   // get repo
   http.get("https://api.github.com/repos/:owner/:repo", ({ params: { owner, repo } }: { params: { owner: string; repo: string } }) => {
     const item = db.repo.findFirst({ where: { name: { equals: repo }, owner: { login: { equals: owner } } } });

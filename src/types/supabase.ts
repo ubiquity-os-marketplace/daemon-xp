@@ -9,11 +9,17 @@ export type SaveXpRecordInput = {
   numericAmount: number;
 };
 
+export type UserXpTotal = {
+  total: number;
+  permitCount: number;
+};
+
 export type SupabaseAdapterContract = {
   location: {
     getOrCreateIssueLocation: (issue: IssueLocationInput) => Promise<number>;
   };
   xp: {
     saveRecord: (input: SaveXpRecordInput) => Promise<void>;
+    getUserTotal: (userId: number) => Promise<UserXpTotal>;
   };
 };

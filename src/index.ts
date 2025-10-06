@@ -3,8 +3,9 @@ import { Context } from "@ubiquity-os/plugin-sdk";
 import { createAdapters } from "./adapters";
 import { Database } from "./adapters/supabase/generated-types";
 import { handleIssueUnassigned } from "./handlers/handle-issue-unassigned";
+import { handleXpCommand } from "./handlers/handle-xp-command";
 import { ContextPlugin, Env, PluginSettings, SupportedEvents } from "./types/index";
-import { isIssueUnassignedEvent } from "./types/typeguards";
+import { isIssueUnassignedEvent, isXpCommandEvent } from "./types/typeguards";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -15,6 +16,11 @@ export async function runPlugin(context: Context<PluginSettings, Env, null, Supp
   const augmentedContext = context as ContextPlugin;
 
   augmentedContext.adapters = createAdapters(supabaseClient, augmentedContext);
+
+  if (isXpCommandEvent(augmentedContext)) {
+    await handleXpCommand(augmentedContext);
+    return;
+  }
 
   if (isIssueUnassignedEvent(augmentedContext)) {
     await handleIssueUnassigned(augmentedContext);
