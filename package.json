@@ -22,7 +22,7 @@
     "knip-ci": "knip --no-exit-code --reporter json --config .github/knip.ts",
     "test": "cross-env NODE_OPTIONS=\"$NODE_OPTIONS --experimental-vm-modules\" jest --setupFiles dotenv/config --coverage",
     "dev": "bun run --port 4000 --no-clear-screen --watch src/worker.ts",
-    "prepare": "husky",
+    "prepare": "husky && bun run supabase:generate:remote",
     "supabase-types": "cross-env-shell supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/adapters/supabase/generated-types.ts",
     "supabase:generate:remote": "dotenv -- bun run supabase-types"
   },
@@ -38,7 +38,6 @@
     "@supabase/supabase-js": "^2.58.0",
     "@ubiquity-os/plugin-sdk": "3.3.0",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
-    "dotenv": "^17.2.3",
     "hono": "^4.6.19",
     "ts-node": "^10.9.2"
   },
