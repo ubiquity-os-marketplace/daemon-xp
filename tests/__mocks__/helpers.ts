@@ -72,3 +72,23 @@ export function createComment(comment: string, commentId: number) {
     });
   }
 }
+
+export function createTimelineEvent(
+  issueNumber: number,
+  event: {
+    id?: number;
+    actor?: Record<string, unknown> | null;
+    assignee?: Record<string, unknown> | null;
+    created_at?: string;
+    eventName?: string;
+  } = {}
+) {
+  db.issueTimelineEvent.create({
+    id: event.id ?? Date.now(),
+    issue_number: issueNumber,
+    event: event.eventName ?? "unassigned",
+    created_at: event.created_at ?? new Date().toISOString(),
+    actor: event.actor ?? null,
+    assignee: event.assignee ?? null,
+  });
+}

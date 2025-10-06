@@ -19,6 +19,9 @@ export const handlers = [
       db.issue.findFirst({ where: { owner: { equals: owner as string }, repo: { equals: repo as string }, number: { equals: Number(issueNumber) } } })
     )
   ),
+  http.get("https://api.github.com/repos/:owner/:repo/issues/:issue_number/timeline", ({ params: { issue_number: issueNumber } }) =>
+    HttpResponse.json(db.issueTimelineEvent.findMany({ where: { issue_number: { equals: Number(issueNumber) } } }) ?? [])
+  ),
   // get user
   http.get("https://api.github.com/users/:username", ({ params: { username } }) =>
     HttpResponse.json(db.users.findFirst({ where: { login: { equals: username as string } } }))

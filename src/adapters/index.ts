@@ -5,7 +5,7 @@ import { Database } from "./supabase/generated-types";
 
 export function createAdapters(supabaseClient: SupabaseClient<Database>, context: ContextPlugin) {
   return {
-    supabase: new SupabaseAdapter(context),
+    supabase: new SupabaseAdapter(context, supabaseClient),
   };
 }
 

@@ -1,6 +1,7 @@
 import { Context as PluginContext } from "@ubiquity-os/plugin-sdk";
 import { Env } from "./env";
 import { PluginSettings } from "./plugin-input";
+import { SupabaseAdapterContract } from "./supabase";
 
 /**
  * Update `manifest.json` with any events you want to support like so:
@@ -10,5 +11,7 @@ import { PluginSettings } from "./plugin-input";
 export type SupportedEvents = "issues.unassigned";
 
 export type ContextPlugin<T extends SupportedEvents = SupportedEvents> = PluginContext<PluginSettings, Env, null, T> & {
-  adapters: Record<string, unknown>;
+  adapters: {
+    supabase: SupabaseAdapterContract;
+  };
 };
