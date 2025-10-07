@@ -15,7 +15,7 @@ export async function getOrCreateIssueLocation(context: ContextPlugin, client: S
     .from("locations")
     .insert({
       issue_id: issue.issueId,
-      node_type: "issue",
+      node_type: "Issue",
       node_url: issue.issueUrl,
     })
     .select("id")
