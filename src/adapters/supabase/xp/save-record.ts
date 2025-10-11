@@ -1,5 +1,5 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-import { randomUUID } from "crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { keccak256, toUtf8Bytes } from "ethers";
 import { ContextPlugin } from "../../../types";

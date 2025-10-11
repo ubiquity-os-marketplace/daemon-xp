@@ -1,7 +1,6 @@
-import Decimal from "decimal.js";
 import { isBotActor } from "../github/is-bot-actor";
 import { ContextPlugin } from "../types";
-import { UserXpTotal } from "../types/supabase";
+import { formatHandle, formatXp, sanitizeHandle, shouldReturnNoData } from "../xp/utils";
 
 const XP_COMMAND = "/xp";
 
@@ -92,14 +91,6 @@ function parseCommand(body: string): ParsedCommand | null {
   return { username };
 }
 
-function sanitizeHandle(raw: string): string | undefined {
-  const normalized = raw.trim().replace(/^@+/, "");
-  if (normalized.length === 0) {
-    return undefined;
-  }
-  return normalized;
-}
-
 function getSender(context: XpCommandContext): Sender | undefined {
   return (context.payload as { sender?: Sender } | undefined)?.sender;
 }
@@ -138,25 +129,6 @@ function isNotFoundError(error: unknown): boolean {
   }
   const status = (error as { status?: number }).status;
   return status === 404;
-}
-
-function shouldReturnNoData(total: UserXpTotal): boolean {
-  return total.permitCount === 0 || !Number.isFinite(total.total);
-}
-
-function formatXp(amount: number): string {
-  if (!Number.isFinite(amount)) {
-    return "0";
-  }
-  const decimal = new Decimal(amount);
-  const places = decimal.decimalPlaces();
-  const precision = places > 2 ? 2 : places;
-  return decimal.toFixed(precision);
-}
-
-function formatHandle(login: string): string {
-  const normalized = login.startsWith("@") ? login.slice(1) : login;
-  return `@${normalized}`;
 }
 
 async function postNoDataComment(context: XpCommandContext, login: string): Promise<void> {

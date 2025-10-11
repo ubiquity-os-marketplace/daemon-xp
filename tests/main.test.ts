@@ -6,7 +6,7 @@ import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import dotenv from "dotenv";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
-import * as adaptersModule from "../src/adapters";
+import { overrideXpRequestDependencies, resetXpRequestDependencies } from "../src/http/xp/handle-xp-request";
 import { ContextPlugin, Env, SaveXpRecordInput, SupabaseAdapterContract, UserXpTotal } from "../src/types";
 import { db } from "./__mocks__/db";
 import { createTimelineEvent, setupTests } from "./__mocks__/helpers";
@@ -14,6 +14,7 @@ import { server } from "./__mocks__/node";
 
 dotenv.config();
 const octokit = new Octokit();
+type GetUserTotalWithLogger = typeof import("../src/adapters/supabase/xp/get-user-total").getUserTotalWithLogger;
 
 beforeAll(() => {
   server.listen();
@@ -22,6 +23,7 @@ afterEach(() => {
   server.resetHandlers();
   jest.clearAllMocks();
   jest.restoreAllMocks();
+  resetXpRequestDependencies();
 });
 afterAll(() => server.close());
 
@@ -45,55 +47,35 @@ describe("Plugin tests", () => {
     const supabase = new SupabaseAdapterStub();
     const price = 42.5;
     const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD` });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
-
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(1);
     expect(supabase.calls[0]?.numericAmount).toBe(-price);
     expect(supabase.calls[0]?.userId).toBe(context.payload.assignee?.id);
-    adaptersSpy.mockRestore();
   });
 
   it("Should not create an XP record when the unassignment is not from a bot", async () => {
     const supabase = new SupabaseAdapterStub();
     const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "User" });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
-
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(0);
-    adaptersSpy.mockRestore();
   });
 
   it("Should not create an XP record when no matching timeline entry is found", async () => {
     const supabase = new SupabaseAdapterStub();
     const { context } = createUnassignedContext({ supabaseAdapter: supabase, includeTimeline: false });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
-
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(0);
-    adaptersSpy.mockRestore();
   });
 
   it("Should not create an XP record when the issue price label is missing", async () => {
     const supabase = new SupabaseAdapterStub();
     const { context } = createUnassignedContext({ supabaseAdapter: supabase, includePriceLabel: false });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
-
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(0);
-    adaptersSpy.mockRestore();
   });
 
   it("Should post the sender's XP when the /xp command is used without arguments", async () => {
@@ -101,9 +83,6 @@ describe("Plugin tests", () => {
     const commenterId = 1;
     supabase.setUserTotal(commenterId, 42.5, 2);
     const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp", commenterId });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -113,7 +92,6 @@ describe("Plugin tests", () => {
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body).toContain("42.5 XP");
-    adaptersSpy.mockRestore();
   });
 
   it("Should post XP for the requested username when provided", async () => {
@@ -121,9 +99,6 @@ describe("Plugin tests", () => {
     const targetUser = db.users.create({ id: 99, name: "Requested User", login: "requested-user" });
     supabase.setUserTotal(targetUser.id, 17.25, 3);
     const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user" });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -133,15 +108,11 @@ describe("Plugin tests", () => {
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body?.startsWith("@requested-user currently has 17.25 XP.")).toBe(true);
-    adaptersSpy.mockRestore();
   });
 
   it("Should reply with no data when the requested user does not exist", async () => {
     const supabase = new SupabaseAdapterStub();
     const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp missing-user" });
-    const adaptersSpy = jest
-      .spyOn(adaptersModule, "createAdapters")
-      .mockReturnValue({ supabase: supabase as unknown as ReturnType<typeof adaptersModule.createAdapters>["supabase"] });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -151,7 +122,92 @@ describe("Plugin tests", () => {
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body?.startsWith("I don't have XP data for @missing-user yet.")).toBe(true);
-    adaptersSpy.mockRestore();
+  });
+
+  it("Should return XP data from the /xp endpoint", async () => {
+    const getUserTotalWithLoggerMock: jest.MockedFunction<GetUserTotalWithLogger> = jest.fn(async (...args: Parameters<GetUserTotalWithLogger>) => {
+      const [, , userId] = args;
+      if (userId === 1) {
+        return { total: 12.5, permitCount: 3 };
+      }
+      return { total: 0, permitCount: 0 };
+    });
+    overrideXpRequestDependencies({ getUserTotal: getUserTotalWithLoggerMock });
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp?user=user1"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({
+      users: [
+        {
+          login: "user1",
+          id: 1,
+          hasData: true,
+          total: 12.5,
+          permitCount: 3,
+        },
+      ],
+    });
+    expect(getUserTotalWithLoggerMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
+  });
+
+  it("Should return unavailable entries for usernames without XP data", async () => {
+    db.users.create({ id: 3, name: "user3", login: "user3" });
+    const getUserTotalWithLoggerMock: jest.MockedFunction<GetUserTotalWithLogger> = jest.fn(async (...args: Parameters<GetUserTotalWithLogger>) => {
+      const [, , userId] = args;
+      if (userId === 3) {
+        return { total: 0, permitCount: 0 };
+      }
+      return { total: 4, permitCount: 1 };
+    });
+    overrideXpRequestDependencies({ getUserTotal: getUserTotalWithLoggerMock });
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp?user=user3&user=missing-user"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({
+      users: [
+        {
+          login: "user3",
+          hasData: false,
+          message: "I don't have XP data for @user3 yet.",
+        },
+        {
+          login: "missing-user",
+          hasData: false,
+          message: "I don't have XP data for @missing-user yet.",
+        },
+      ],
+    });
+    expect(getUserTotalWithLoggerMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3);
+  });
+
+  it("Should reject /xp requests without usernames", async () => {
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload).toEqual({
+      error: {
+        code: "missing_usernames",
+        message: "At least one username is required. Provide it using the 'user' query parameter.",
+      },
+    });
   });
 });
 
