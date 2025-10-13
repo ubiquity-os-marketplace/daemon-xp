@@ -46766,15 +46766,17 @@ function isXpCommandEvent(e) {
 }
 async function runPlugin(e) {
   const { logger: t, eventName: r } = e;
-  const s = new St.SupabaseClient(e.env.SUPABASE_URL, e.env.SUPABASE_KEY);
-  const o = e;
-  o.adapters = createAdapters(s, o);
-  if (isXpCommandEvent(o)) {
-    await handleXpCommand(o);
+  const s = e;
+  if (!s.adapters) {
+    const t = (0, St.createClient)(e.env.SUPABASE_URL, e.env.SUPABASE_KEY);
+    s.adapters = createAdapters(t, s);
+  }
+  if (isXpCommandEvent(s)) {
+    await handleXpCommand(s);
     return;
   }
-  if (isIssueUnassignedEvent(o)) {
-    await handleIssueUnassigned(o);
+  if (isIssueUnassignedEvent(s)) {
+    await handleIssueUnassigned(s);
     return;
   }
   t.warn(`Unsupported event: ${r}`);
