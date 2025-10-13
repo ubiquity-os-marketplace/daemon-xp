@@ -30,7 +30,7 @@ export default {
       let validatedEnv: Env;
 
       try {
-        const runtimeEnv = honoEnv(ctx);
+        const runtimeEnv = honoEnv(ctx as unknown as Parameters<typeof honoEnv>[0]);
         validatedEnv = Value.Decode(envSchema, Value.Default(envSchema, runtimeEnv));
       } catch (error) {
         console.error("Invalid environment for /xp request", error);
