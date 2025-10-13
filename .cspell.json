@@ -20,7 +20,10 @@
     "Typeguards",
     "sonarjs",
     "knip",
-    "mischeck"
+    "mischeck",
+    "unassigns",
+    "unassignment",
+    "keccak"
   ],
   "dictionaries": ["typescript", "node", "software-terms"],
   "import": ["@cspell/dict-typescript/cspell-ext.json", "@cspell/dict-node/cspell-ext.json", "@cspell/dict-software-terms"],
