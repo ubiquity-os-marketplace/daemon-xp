@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Context } from "@ubiquity-os/plugin-sdk";
-import { createAdapters } from "./adapters";
+import { createAdapters } from "./adapters/index";
 import { Database } from "./adapters/supabase/generated-types";
 import { handleIssueUnassigned } from "./handlers/handle-issue-unassigned";
 import { handleXpCommand } from "./handlers/handle-xp-command";
