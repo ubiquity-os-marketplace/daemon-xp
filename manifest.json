@@ -1,12 +1,7 @@
 {
   "name": "daemon-xp",
   "description": "Handles XP for users.",
-  "ubiquity:listeners": [
-    "issues.unassigned",
-    "issue_comment.created",
-    "pull_request_review_comment.created",
-    "pull_request_review.submitted"
-  ],
+  "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
   "commands": {
     "xp": {
       "ubiquity:example": "/xp username",
@@ -20,14 +15,6 @@
   "configuration": {
     "default": {},
     "type": "object",
-    "properties": {
-      "configurableResponse": {
-        "default": "Hello, world!",
-        "type": "string"
-      },
-      "customStringsUrl": {
-        "type": "string"
-      }
-    }
+    "properties": {}
   }
 }
