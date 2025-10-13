@@ -6,6 +6,7 @@ const cfg: Config = {
       "ts-jest",
       {
         useESM: true,
+        importAttributesKeyword: "with",
       },
     ],
   },

@@ -1,4 +1,4 @@
-import { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { Context } from "@ubiquity-os/plugin-sdk";
 import { createAdapters } from "./adapters";
 import { Database } from "./adapters/supabase/generated-types";
@@ -12,10 +12,12 @@ import { isIssueUnassignedEvent, isXpCommandEvent } from "./types/typeguards";
  */
 export async function runPlugin(context: Context<PluginSettings, Env, null, SupportedEvents>) {
   const { logger, eventName } = context;
-  const supabaseClient = new SupabaseClient<Database>(context.env.SUPABASE_URL, context.env.SUPABASE_KEY);
   const augmentedContext = context as ContextPlugin;
 
-  augmentedContext.adapters = createAdapters(supabaseClient, augmentedContext);
+  if (!augmentedContext.adapters) {
+    const supabaseClient = createClient<Database>(context.env.SUPABASE_URL, context.env.SUPABASE_KEY);
+    augmentedContext.adapters = createAdapters(supabaseClient, augmentedContext);
+  }
 
   if (isXpCommandEvent(augmentedContext)) {
     await handleXpCommand(augmentedContext);

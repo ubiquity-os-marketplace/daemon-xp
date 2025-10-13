@@ -4,7 +4,7 @@ import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { env as honoEnv } from "hono/adapter";
-import manifest from "../manifest.json" with { type: "json" };
+import manifest from "../manifest.json";
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
 import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types";
