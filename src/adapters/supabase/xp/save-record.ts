@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { keccak256, toUtf8Bytes } from "ethers";
-import { ContextPlugin } from "../../../types";
+import { ContextPlugin } from "../../../types/index";
 import { SaveXpRecordInput } from "../../../types/supabase";
 import { Database } from "../generated-types";
 import { getOrCreateIssueLocation } from "../location/get-or-create-issue-location";

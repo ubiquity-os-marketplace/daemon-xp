@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ContextPlugin } from "../../../types";
+import { ContextPlugin } from "../../../types/index";
 import { IssueLocationInput } from "../../../types/supabase";
 import { Database } from "../generated-types";
 

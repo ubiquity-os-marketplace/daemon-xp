@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { LOG_LEVEL, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Database } from "../../adapters/supabase/generated-types";
 import { Logger, getUserTotalWithLogger } from "../../adapters/supabase/xp/get-user-total";
-import { Env } from "../../types";
+import { Env } from "../../types/index";
 import { formatHandle, sanitizeHandle, shouldReturnNoData } from "../../xp/utils";
 import { fetchGitHubUser } from "./fetch-github-user";
 

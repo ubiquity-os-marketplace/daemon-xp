@@ -1,5 +1,5 @@
 import { isBotActor } from "../github/is-bot-actor";
-import { ContextPlugin } from "../types";
+import { ContextPlugin } from "../types/index";
 import { formatHandle, formatXp, sanitizeHandle, shouldReturnNoData } from "../xp/utils";
 
 const XP_COMMAND = "/xp";

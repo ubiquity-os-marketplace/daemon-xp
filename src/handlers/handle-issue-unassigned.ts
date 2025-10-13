@@ -1,7 +1,7 @@
 import { findLatestUnassignmentEvent } from "../github/find-latest-unassignment-event";
 import { getIssueTimeline } from "../github/get-issue-timeline";
 import { isBotActor } from "../github/is-bot-actor";
-import { ContextPlugin } from "../types";
+import { ContextPlugin } from "../types/index";
 
 export async function handleIssueUnassigned(context: ContextPlugin<"issues.unassigned">): Promise<void> {
   const assignee = context.payload.assignee;

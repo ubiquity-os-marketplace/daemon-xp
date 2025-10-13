@@ -1,4 +1,4 @@
-import { ContextPlugin } from "../types";
+import { ContextPlugin } from "../types/index";
 
 export type IssueTimelineEvent = Awaited<ReturnType<ContextPlugin["octokit"]["rest"]["issues"]["listEventsForTimeline"]>>["data"][number];
 

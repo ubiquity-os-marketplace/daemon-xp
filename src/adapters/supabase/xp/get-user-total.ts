@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import Decimal from "decimal.js";
-import { ContextPlugin } from "../../../types";
+import { ContextPlugin } from "../../../types/index";
 import { UserXpTotal } from "../../../types/supabase";
 import { Database } from "../generated-types";
 

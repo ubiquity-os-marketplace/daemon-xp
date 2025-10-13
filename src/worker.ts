@@ -7,7 +7,7 @@ import { env as honoEnv } from "hono/adapter";
 import manifest from "../manifest.json";
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
-import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types";
+import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types/index";
 
 export default {
   async fetch(request: Request, env: Env, executionCtx?: ExecutionContext) {
