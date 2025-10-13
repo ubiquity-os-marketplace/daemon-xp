@@ -19,9 +19,13 @@ export const handlers = [
       db.issue.findFirst({ where: { owner: { equals: owner as string }, repo: { equals: repo as string }, number: { equals: Number(issueNumber) } } })
     )
   ),
+  http.get("https://api.github.com/repos/:owner/:repo/issues/:issue_number/comments", ({ params: { issue_number: issueNumber } }) =>
+    HttpResponse.json(db.issueComments.findMany({ where: { issue_number: { equals: Number(issueNumber) } } }) ?? [])
+  ),
   http.get("https://api.github.com/repos/:owner/:repo/issues/:issue_number/timeline", ({ params: { issue_number: issueNumber } }) =>
     HttpResponse.json(db.issueTimelineEvent.findMany({ where: { issue_number: { equals: Number(issueNumber) } } }) ?? [])
   ),
+  http.get("https://api.github.com/repos/:owner/:repo/pulls/:pull_number/reviews", () => HttpResponse.json([])),
   // get user
   http.get("https://api.github.com/users/:username", ({ params: { username } }) => {
     const user = db.users.findFirst({ where: { login: { equals: username as string } } });
@@ -61,6 +65,8 @@ export const handlers = [
     db.issueComments.update({ where: { id: { equals: id } }, data: newItem });
     return HttpResponse.json(newItem);
   }),
+  http.get("https://api.github.com/orgs/:org/memberships/:username", () => new HttpResponse(null, { status: 404 })),
+  http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", () => HttpResponse.json({ permission: "read" })),
 ];
 
 async function getValue(body: ReadableStream<Uint8Array> | null) {

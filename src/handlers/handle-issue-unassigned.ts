@@ -1,7 +1,10 @@
+import { filterCollaborators } from "../github/filter-collaborators";
 import { findLatestUnassignmentEvent } from "../github/find-latest-unassignment-event";
+import { getInvolvedUsers } from "../github/get-involved-users";
 import { getIssueTimeline } from "../github/get-issue-timeline";
 import { isBotActor } from "../github/is-bot-actor";
 import { ContextPlugin } from "../types/index";
+import { formatHandle, formatXp } from "../xp/utils";
 
 export async function handleIssueUnassigned(context: ContextPlugin<"issues.unassigned">): Promise<void> {
   const assignee = context.payload.assignee;
@@ -53,12 +56,83 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     context.logger.info("Parsed price is not a finite number. Skipping XP deduction.");
     return;
   }
+  const { multiplier, collaborators } = await resolveCollaboratorMultiplier(context);
+  const malusAmount = xpAmount * multiplier;
   await context.adapters.supabase.xp.saveRecord({
     userId: assignee.id,
     issue: {
       issueId,
       issueUrl,
     },
-    numericAmount: -xpAmount,
+    numericAmount: -malusAmount,
   });
+  const currentTotal = await context.adapters.supabase.xp.getUserTotal(assignee.id);
+  await postMalusComment(context, {
+    assignee,
+    baseAmount: xpAmount,
+    malusAmount,
+    multiplier,
+    collaborators,
+    currentTotal: currentTotal.total,
+  });
+}
+
+type CollaboratorMultiplierResult = {
+  multiplier: number;
+  collaborators: Awaited<ReturnType<typeof filterCollaborators>>;
+};
+
+async function resolveCollaboratorMultiplier(context: ContextPlugin<"issues.unassigned">): Promise<CollaboratorMultiplierResult> {
+  const users = await getInvolvedUsers(context);
+  if (users.length === 0) {
+    context.logger.info("No involved users detected for disqualification event.");
+    return {
+      multiplier: 1,
+      collaborators: [],
+    };
+  }
+  const collaborators = await filterCollaborators(context, users);
+  const count = collaborators.length;
+  if (count === 0) {
+    context.logger.info("No collaborators among involved users. Applying base malus only.");
+    return {
+      multiplier: 1,
+      collaborators,
+    };
+  }
+  context.logger.info(`Found ${count} collaborators involved. Applying multiplier.`);
+  return {
+    multiplier: count,
+    collaborators,
+  };
+}
+
+type MalusCommentDetails = {
+  assignee: NonNullable<ContextPlugin<"issues.unassigned">["payload"]["assignee"]>;
+  baseAmount: number;
+  malusAmount: number;
+  multiplier: number;
+  collaborators: Awaited<ReturnType<typeof filterCollaborators>>;
+  currentTotal: number;
+};
+
+async function postMalusComment(context: ContextPlugin<"issues.unassigned">, details: MalusCommentDetails): Promise<void> {
+  const assigneeLogin = typeof details.assignee.login === "string" && details.assignee.login.length > 0 ? details.assignee.login : String(details.assignee.id);
+  const collaboratorHandles = details.collaborators.map((item) => formatHandle(item.login));
+  const formattedBase = formatXp(details.baseAmount);
+  const formattedMalus = formatXp(details.malusAmount);
+  const formattedTotal = formatXp(details.currentTotal);
+  const multiplierLine =
+    details.collaborators.length > 0
+      ? `Collaborator multiplier: ${details.multiplier} (${collaboratorHandles.join(", ")}).`
+      : `Collaborator multiplier: ${details.multiplier}.`;
+  const lines = [
+    `Applied a malus of -${formattedMalus} XP to ${formatHandle(assigneeLogin)} for disqualification.`,
+    `Base XP: ${formattedBase}.`,
+    multiplierLine,
+    `Current XP for ${formatHandle(assigneeLogin)}: ${formattedTotal}.`,
+  ];
+  const body = lines.join("\n");
+  const logToken = context.logger.info(body);
+  await context.commentHandler.postComment(context, logToken, { raw: true, updateComment: false });
 }

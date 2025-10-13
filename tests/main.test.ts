@@ -3,8 +3,11 @@ import { drop } from "@mswjs/data";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { http, HttpResponse } from "msw";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
+import { filterCollaborators } from "../src/github/filter-collaborators";
+import { getInvolvedUsers } from "../src/github/get-involved-users";
 import { overrideXpRequestDependencies, resetXpRequestDependencies } from "../src/http/xp/handle-xp-request";
 import { ContextPlugin, Env, SaveXpRecordInput, SupabaseAdapterContract, UserXpTotal } from "../src/types/index";
 import { db } from "./__mocks__/db";
@@ -50,6 +53,95 @@ describe("Plugin tests", () => {
     expect(supabase.calls).toHaveLength(1);
     expect(supabase.calls[0]?.numericAmount).toBe(-price);
     expect(supabase.calls[0]?.userId).toBe(context.payload.assignee?.id);
+  });
+
+  it("Should scale the malus by the number of collaborators involved", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 55;
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD` });
+    const assigneeId = context.payload.assignee?.id;
+    if (typeof assigneeId === "number") {
+      supabase.setUserTotal(assigneeId, 200, 2);
+    }
+    const originalPaginate = context.octokit.paginate.bind(context.octokit);
+    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method, params) => {
+      // debug
+      console.log("paginate params", params);
+      if (params && typeof params === "object" && "issue_number" in params && !("mediaType" in params) && !("pull_number" in params)) {
+        return [
+          { id: 501, user: { id: 901, login: "collab-one", type: "User" } },
+          { id: 502, user: { id: 902, login: "collab-two", type: "User" } },
+        ];
+      }
+      if (params && typeof params === "object" && "pull_number" in params) {
+        return [];
+      }
+      return originalPaginate(method, params);
+    });
+    server.use(
+      http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", ({ params }) => {
+        const { username } = params;
+        if (username === "collab-one" || username === "collab-two") {
+          return HttpResponse.json({ permission: "write" });
+        }
+        return HttpResponse.json({ permission: "read" });
+      })
+    );
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(1);
+    expect(supabase.calls[0]?.numericAmount).toBe(-(price * 2));
+  });
+
+  it("Should post a malus summary comment including collaborator multiplier and current XP", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 25;
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD` });
+    const assigneeId = context.payload.assignee?.id;
+    if (typeof assigneeId === "number") {
+      supabase.setUserTotal(assigneeId, 150, 2);
+    }
+    const originalPaginate = context.octokit.paginate.bind(context.octokit);
+    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method, params) => {
+      console.log("paginate params", params);
+      if (params && typeof params === "object" && "issue_number" in params && !("mediaType" in params) && !("pull_number" in params)) {
+        return [{ id: 503, user: { id: 903, login: "collab-one", type: "User" } }];
+      }
+      if (params && typeof params === "object" && "pull_number" in params) {
+        return [];
+      }
+      return originalPaginate(method, params);
+    });
+    jest.spyOn(context.octokit.rest.orgs, "getMembershipForUser").mockImplementation(async () => {
+      const error = new Error("Not Found") as Error & { status?: number };
+      error.status = 404;
+      throw error;
+    });
+    const permissionSpy = jest.spyOn(context.octokit.rest.repos, "getCollaboratorPermissionLevel");
+    permissionSpy.mockImplementation(async (args) => {
+      const { username } = (args ?? { username: "" }) as { username: string };
+      if (username === "collab-one") {
+        return { data: { permission: "write" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
+      }
+      return { data: { permission: "read" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
+    });
+    const singleInvolvedUsers = await getInvolvedUsers(context);
+    expect(singleInvolvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining(["collab-one"]));
+    const singleCollaborators = await filterCollaborators(context, singleInvolvedUsers);
+    expect(singleCollaborators.map((user) => user.login)).toEqual(expect.arrayContaining(["collab-one"]));
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(1);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const latestComment = issueComments[issueComments.length - 1];
+    expect(latestComment?.body).toContain("Applied a malus of -25");
+    expect(latestComment?.body).toContain("Collaborator multiplier: 1 (@collab-one)");
+    expect(latestComment?.body).toContain("Current XP");
+    expect(latestComment?.body).toContain("125");
+    expect(permissionSpy).toHaveBeenCalledWith(expect.objectContaining({ username: "collab-one" }));
   });
 
   it("Should not create an XP record when the unassignment is not from a bot", async () => {
@@ -370,6 +462,13 @@ class SupabaseAdapterStub implements SupabaseAdapterContract {
   xp = {
     saveRecord: jest.fn(async (input: SaveXpRecordInput) => {
       this.calls.push(input);
+      const current = this._xpTotals.get(input.userId) ?? { total: 0, permitCount: 0 };
+      const nextTotal = current.total + input.numericAmount;
+      const permitCount = current.permitCount > 0 ? current.permitCount : 1;
+      this._xpTotals.set(input.userId, {
+        total: nextTotal,
+        permitCount,
+      });
     }),
     getUserTotal: jest.fn(async (userId: number) => this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 }),
   };
