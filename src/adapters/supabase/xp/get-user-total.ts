@@ -18,7 +18,7 @@ export async function getUserTotalWithLogger(logger: Logger, client: SupabaseCli
 
 async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
   logger.info(`Fetching XP permits for userId: ${userId}`);
-  const permits = await client.from("permits").select("amount").eq("beneficiary_id", userId).is("token_id", null);
+  const permits = await client.from("permits").select("amount").eq("beneficiary_id", userId).not("token_id", "is", null);
   if (permits.error) {
     throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
   }
