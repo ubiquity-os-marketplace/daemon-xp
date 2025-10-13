@@ -3,7 +3,6 @@ import { drop } from "@mswjs/data";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
-import dotenv from "dotenv";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
 import { overrideXpRequestDependencies, resetXpRequestDependencies } from "../src/http/xp/handle-xp-request";
@@ -12,7 +11,6 @@ import { db } from "./__mocks__/db";
 import { createTimelineEvent, setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
 
-dotenv.config();
 const octokit = new Octokit();
 type GetUserTotalWithLogger = typeof import("../src/adapters/supabase/xp/get-user-total").getUserTotalWithLogger;
 
