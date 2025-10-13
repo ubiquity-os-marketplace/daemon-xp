@@ -8,5 +8,3 @@ export function createAdapters(supabaseClient: SupabaseClient<Database>, context
     supabase: new SupabaseAdapter(context, supabaseClient),
   };
 }
-
-export * from "./supabase";
