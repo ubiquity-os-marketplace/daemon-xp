@@ -18,26 +18,45 @@ export async function getUserTotalWithLogger(logger: Logger, client: SupabaseCli
 
 async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
   logger.info(`Fetching XP permits for userId: ${userId}`);
-  const permits = await client.from("permits").select("amount").eq("beneficiary_id", userId).not("token_id", "is", null);
-  if (permits.error) {
-    throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
+  const pageSize = 1000;
+  let from = 0;
+  let permitCount = 0;
+  let total = new Decimal(0);
+  while (true) {
+    const permits = await client
+      .from("permits" as never)
+      .select("amount")
+      .eq("beneficiary_id", userId)
+      .not("token_id", "is", null)
+      .range(from, from + pageSize - 1);
+    if (permits.error) {
+      throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
+    }
+    const rows = (permits.data ?? []) as { amount: string | null }[];
+    if (rows.length === 0) {
+      break;
+    }
+    for (const row of rows) {
+      const amount = typeof row.amount === "string" ? row.amount : "0";
+      total = total.plus(new Decimal(amount));
+    }
+    permitCount += rows.length;
+    if (rows.length < pageSize) {
+      break;
+    }
+    from += pageSize;
   }
-  const rows = permits.data ?? [];
-  if (rows.length === 0) {
+  if (permitCount === 0) {
     logger.info(`No XP permits found for userId: ${userId}`);
     return {
       total: 0,
       permitCount: 0,
     };
   }
-  const total = rows.reduce((acc, row) => {
-    const amount = typeof row.amount === "string" ? row.amount : "0";
-    return acc.plus(new Decimal(amount));
-  }, new Decimal(0));
   const normalized = total.div(BASE_UNIT);
   logger.ok(`XP permits fetched successfully for userId: ${userId}`);
   return {
     total: normalized.toNumber(),
-    permitCount: rows.length,
+    permitCount,
   };
 }

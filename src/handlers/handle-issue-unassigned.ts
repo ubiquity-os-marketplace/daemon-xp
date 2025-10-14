@@ -4,7 +4,7 @@ import { getInvolvedUsers } from "../github/get-involved-users";
 import { getIssueTimeline } from "../github/get-issue-timeline";
 import { isBotActor } from "../github/is-bot-actor";
 import { ContextPlugin } from "../types/index";
-import { formatHandle, formatXp } from "../xp/utils";
+import { formatXp, sanitizeHandle } from "../xp/utils";
 
 export async function handleIssueUnassigned(context: ContextPlugin<"issues.unassigned">): Promise<void> {
   const assignee = context.payload.assignee;
@@ -74,6 +74,7 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     multiplier,
     collaborators,
     currentTotal: currentTotal.total,
+    issueUrl,
   });
 }
 
@@ -114,25 +115,53 @@ type MalusCommentDetails = {
   multiplier: number;
   collaborators: Awaited<ReturnType<typeof filterCollaborators>>;
   currentTotal: number;
+  issueUrl: string;
 };
 
 async function postMalusComment(context: ContextPlugin<"issues.unassigned">, details: MalusCommentDetails): Promise<void> {
-  const assigneeLogin = typeof details.assignee.login === "string" && details.assignee.login.length > 0 ? details.assignee.login : String(details.assignee.id);
-  const collaboratorHandles = details.collaborators.map((item) => formatHandle(item.login));
+  const assigneeHandle = getDisplayHandle(details.assignee.login, details.assignee.id);
+  const collaboratorHandles = details.collaborators.map((item) => toCode(getDisplayHandle(item.login, item.id)));
   const formattedBase = formatXp(details.baseAmount);
   const formattedMalus = formatXp(details.malusAmount);
   const formattedTotal = formatXp(details.currentTotal);
-  const multiplierLine =
-    details.collaborators.length > 0
-      ? `Collaborator multiplier: ${details.multiplier} (${collaboratorHandles.join(", ")}).`
-      : `Collaborator multiplier: ${details.multiplier}.`;
+  const collaboratorText = collaboratorHandles.length > 0 ? collaboratorHandles.join(", ") : toCode("None");
+  const assigneeCode = toCode(assigneeHandle);
+  const baseValue = toCode(formattedBase + " XP");
+  const multiplierValue = toCode(String(details.multiplier) + "x");
+  const malusValue = toCode("-" + formattedMalus + " XP");
+  const totalValue = toCode(formattedTotal + " XP");
   const lines = [
-    `Applied a malus of -${formattedMalus} XP to ${formatHandle(assigneeLogin)} for disqualification.`,
-    `Base XP: ${formattedBase}.`,
-    multiplierLine,
-    `Current XP for ${formatHandle(assigneeLogin)}: ${formattedTotal}.`,
+    "### XP Malus Applied",
+    "",
+    "```text",
+    `Issue: ${details.issueUrl}`,
+    `Assignee: ${assigneeHandle}`,
+    "```",
+    "",
+    "| Field | Value |",
+    "| --- | --- |",
+    `| Assignee | ${assigneeCode} |`,
+    `| Base XP | ${baseValue} |`,
+    `| Collaborator Multiplier | ${multiplierValue} |`,
+    `| Collaborators | ${collaboratorText} |`,
+    `| Applied Malus | ${malusValue} |`,
+    `| Current XP | ${totalValue} |`,
   ];
   const body = lines.join("\n");
   const logToken = context.logger.info(body);
   await context.commentHandler.postComment(context, logToken, { raw: true, updateComment: false });
+}
+
+function getDisplayHandle(login: unknown, fallback: unknown): string {
+  if (typeof login === "string") {
+    const sanitized = sanitizeHandle(login);
+    if (sanitized) {
+      return sanitized;
+    }
+  }
+  return String(fallback);
+}
+
+function toCode(value: string): string {
+  return `\`${value}\``;
 }

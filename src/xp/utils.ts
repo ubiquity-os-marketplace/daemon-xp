@@ -24,6 +24,12 @@ export function formatXp(amount: number): string {
   }
   const decimal = new Decimal(amount);
   const places = decimal.decimalPlaces();
-  const precision = places > 2 ? 2 : places;
-  return decimal.toFixed(precision);
+  if (places <= 2) {
+    return decimal.toFixed(places);
+  }
+  if (decimal.abs().lessThan(1)) {
+    const precision = Math.min(places, 6);
+    return decimal.toFixed(precision);
+  }
+  return decimal.toFixed(2);
 }
