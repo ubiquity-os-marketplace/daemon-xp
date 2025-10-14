@@ -64,9 +64,7 @@ describe("Plugin tests", () => {
       supabase.setUserTotal(assigneeId, 200, 2);
     }
     const originalPaginate = context.octokit.paginate.bind(context.octokit);
-    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method, params) => {
-      // debug
-      console.log("paginate params", params);
+    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method: Parameters<typeof context.octokit.paginate>[0], params: string | undefined) => {
       if (params && typeof params === "object" && "issue_number" in params && !("mediaType" in params) && !("pull_number" in params)) {
         return [
           { id: 501, user: { id: 901, login: "collab-one", type: "User" } },
@@ -102,8 +100,7 @@ describe("Plugin tests", () => {
       supabase.setUserTotal(assigneeId, 150, 2);
     }
     const originalPaginate = context.octokit.paginate.bind(context.octokit);
-    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method, params) => {
-      console.log("paginate params", params);
+    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method: Parameters<typeof context.octokit.paginate>[0], params: string | undefined) => {
       if (params && typeof params === "object" && "issue_number" in params && !("mediaType" in params) && !("pull_number" in params)) {
         return [{ id: 503, user: { id: 903, login: "collab-one", type: "User" } }];
       }
@@ -118,7 +115,7 @@ describe("Plugin tests", () => {
       throw error;
     });
     const permissionSpy = jest.spyOn(context.octokit.rest.repos, "getCollaboratorPermissionLevel");
-    permissionSpy.mockImplementation(async (args) => {
+    permissionSpy.mockImplementation(async (args: Parameters<typeof octokit.rest.repos.getCollaboratorPermissionLevel>[0]) => {
       const { username } = (args ?? { username: "" }) as { username: string };
       if (username === "collab-one") {
         return { data: { permission: "write" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
