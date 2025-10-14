@@ -1,12 +1,7 @@
 {
   "name": "daemon-xp",
   "description": "Handles XP for users.",
-  "ubiquity:listeners": [
-    "issues.unassigned",
-    "issue_comment.created",
-    "pull_request_review_comment.created",
-    "pull_request_review.submitted"
-  ],
+  "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
   "commands": {
     "xp": {
       "ubiquity:example": "/xp username",
@@ -20,7 +15,13 @@
   "configuration": {
     "default": {},
     "type": "object",
-    "properties": {}
+    "properties": {
+      "disableCommentPosting": {
+        "description": "Set to true to prevent XP updates from being posted back to GitHub.",
+        "default": false,
+        "type": "boolean"
+      }
+    }
   },
   "homepage_url": "https://daemon-xp-feat-xp-tracker.deno.dev"
 }
