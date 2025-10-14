@@ -1,18 +1,17 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { drop } from "@mswjs/data";
-import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { http, HttpResponse } from "msw";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
 import { filterCollaborators } from "../src/github/filter-collaborators";
 import { getInvolvedUsers } from "../src/github/get-involved-users";
 import { overrideXpRequestDependencies, resetXpRequestDependencies } from "../src/http/xp/handle-xp-request";
-import { ContextPlugin, Env, SaveXpRecordInput, SupabaseAdapterContract, UserXpTotal } from "../src/types/index";
+import { Env } from "../src/types/index";
 import { db } from "./__mocks__/db";
-import { createTimelineEvent, setupTests } from "./__mocks__/helpers";
+import { setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
+import { createIssueCommentContext, createUnassignedContext, SupabaseAdapterStub } from "./__mocks__/test-context";
 
 const octokit = new Octokit();
 type GetUserTotalWithLogger = typeof import("../src/adapters/supabase/xp/get-user-total").getUserTotalWithLogger;
@@ -47,7 +46,7 @@ describe("Plugin tests", () => {
   it("Should create a negative XP record scaled by the issue price when the bot unassigns a user", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 42.5;
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD` });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(1);
@@ -58,7 +57,7 @@ describe("Plugin tests", () => {
   it("Should scale the malus by the number of collaborators involved", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 55;
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD` });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
     const assigneeId = context.payload.assignee?.id;
     if (typeof assigneeId === "number") {
       supabase.setUserTotal(assigneeId, 200, 2);
@@ -94,7 +93,7 @@ describe("Plugin tests", () => {
   it("Should post a malus summary comment including collaborator multiplier and current XP", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 25;
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD` });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
     const assigneeId = context.payload.assignee?.id;
     if (typeof assigneeId === "number") {
       supabase.setUserTotal(assigneeId, 150, 2);
@@ -143,7 +142,7 @@ describe("Plugin tests", () => {
 
   it("Should not create an XP record when the unassignment is not from a bot", async () => {
     const supabase = new SupabaseAdapterStub();
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "User" });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "User", octokit });
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(0);
@@ -151,7 +150,7 @@ describe("Plugin tests", () => {
 
   it("Should not create an XP record when no matching timeline entry is found", async () => {
     const supabase = new SupabaseAdapterStub();
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, includeTimeline: false });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, includeTimeline: false, octokit });
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(0);
@@ -159,7 +158,7 @@ describe("Plugin tests", () => {
 
   it("Should not create an XP record when the issue price label is missing", async () => {
     const supabase = new SupabaseAdapterStub();
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, includePriceLabel: false });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, includePriceLabel: false, octokit });
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(0);
@@ -169,7 +168,7 @@ describe("Plugin tests", () => {
     const supabase = new SupabaseAdapterStub();
     const commenterId = 1;
     supabase.setUserTotal(commenterId, 42.5, 2);
-    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp", commenterId });
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp", commenterId, octokit });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -185,7 +184,7 @@ describe("Plugin tests", () => {
     const supabase = new SupabaseAdapterStub();
     const targetUser = db.users.create({ id: 99, name: "Requested User", login: "requested-user" });
     supabase.setUserTotal(targetUser.id, 17.25, 3);
-    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user" });
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user", octokit });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -199,7 +198,7 @@ describe("Plugin tests", () => {
 
   it("Should reply with no data when the requested user does not exist", async () => {
     const supabase = new SupabaseAdapterStub();
-    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp missing-user" });
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp missing-user", octokit });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -297,180 +296,3 @@ describe("Plugin tests", () => {
     });
   });
 });
-
-/**
- * The heart of each test. This function creates a context object with the necessary data for the plugin to run.
- *
- * So long as everything is defined correctly in the db (see `./__mocks__/helpers.ts: setupTests()`),
- * this function should be able to handle any event type and the conditions that come with it.
- *
- * Refactor according to your needs.
- */
-function createUnassignedContext(options: {
-  supabaseAdapter?: SupabaseAdapterStub;
-  timelineActorType?: string;
-  includeTimeline?: boolean;
-  priceLabel?: string;
-  includePriceLabel?: boolean;
-}) {
-  if (options.includePriceLabel === false) {
-    db.issue.update({
-      where: { id: { equals: 1 } },
-      data: { labels: [] },
-    });
-  } else if (typeof options.priceLabel === "string") {
-    db.issue.update({
-      where: { id: { equals: 1 } },
-      data: { labels: [{ name: options.priceLabel }] },
-    });
-  }
-  const repoRecord = db.repo.findFirst({ where: { id: { equals: 1 } } });
-  const senderRecord = db.users.findFirst({ where: { id: { equals: 1 } } });
-  const issueRecord = db.issue.findFirst({ where: { id: { equals: 1 } } });
-  const assigneeRecord = db.users.findFirst({ where: { id: { equals: 2 } } });
-  if (!repoRecord || !senderRecord || !issueRecord || !assigneeRecord) {
-    throw new Error("Test fixtures missing required records");
-  }
-  const repo = repoRecord as unknown as ContextPlugin["payload"]["repository"];
-  const sender = senderRecord as unknown as ContextPlugin["payload"]["sender"];
-  const issue = issueRecord as unknown as ContextPlugin<"issues.unassigned">["payload"]["issue"];
-  const assignee = {
-    ...assigneeRecord,
-    type: "User",
-  } as unknown as ContextPlugin<"issues.unassigned">["payload"]["assignee"];
-  const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
-  if (options.includeTimeline !== false) {
-    createTimelineEvent(issue.number, {
-      actor: {
-        id: sender.id,
-        login: sender.login,
-        type: options.timelineActorType ?? "Bot",
-      },
-      assignee: {
-        id: assigneeRecord.id,
-        login: assigneeRecord.login,
-      },
-    });
-  }
-  const context = {
-    eventName: "issues.unassigned",
-    command: null,
-    payload: {
-      action: "unassigned",
-      sender,
-      repository: repo,
-      issue,
-      assignee,
-      installation: { id: 1 } as ContextPlugin["payload"]["installation"],
-      organization: { login: repo.owner.login } as ContextPlugin["payload"]["organization"],
-    },
-    logger: new Logs("debug"),
-    config: {},
-    env: {
-      SUPABASE_URL: "https://supabase.test",
-      SUPABASE_KEY: "test-key",
-    } as Env,
-    octokit: octokit,
-    commentHandler: new CommentHandler(),
-    adapters: {
-      supabase: supabaseAdapter,
-    },
-  } as unknown as ContextPlugin<"issues.unassigned">;
-  const infoSpy = jest.spyOn(context.logger, "info");
-  const errorSpy = jest.spyOn(context.logger, "error");
-  const okSpy = jest.spyOn(context.logger, "ok");
-  return {
-    context,
-    infoSpy,
-    errorSpy,
-    okSpy,
-    supabaseAdapter,
-  };
-}
-
-function createIssueCommentContext(
-  options: {
-    supabaseAdapter?: SupabaseAdapterStub;
-    commentBody?: string;
-    commenterId?: number;
-    commentId?: number;
-  } = {}
-) {
-  const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
-  const repoRecord = db.repo.findFirst({ where: { id: { equals: 1 } } });
-  const issueRecord = db.issue.findFirst({ where: { id: { equals: 1 } } });
-  const commenterRecord = db.users.findFirst({ where: { id: { equals: options.commenterId ?? 1 } } });
-  if (!repoRecord || !issueRecord || !commenterRecord) {
-    throw new Error("Test fixtures missing required records for issue comment context");
-  }
-  const repo = repoRecord as unknown as ContextPlugin["payload"]["repository"];
-  const issue = issueRecord as unknown as ContextPlugin<"issue_comment.created">["payload"]["issue"];
-  const sender = {
-    ...commenterRecord,
-    type: "User",
-  } as unknown as ContextPlugin["payload"]["sender"];
-  const comment = {
-    id: options.commentId ?? Date.now(),
-    body: options.commentBody ?? "/xp",
-    user: {
-      login: commenterRecord.login,
-      id: commenterRecord.id,
-      type: "User",
-    },
-  } as ContextPlugin<"issue_comment.created">["payload"]["comment"];
-  const context = {
-    eventName: "issue_comment.created",
-    command: null,
-    payload: {
-      action: "created",
-      comment,
-      issue,
-      repository: repo,
-      sender,
-      installation: { id: 1 } as ContextPlugin["payload"]["installation"],
-      organization: { login: repo.owner.login } as ContextPlugin["payload"]["organization"],
-    },
-    logger: new Logs("debug"),
-    config: {},
-    env: {
-      SUPABASE_URL: "https://supabase.test",
-      SUPABASE_KEY: "test-key",
-    } as Env,
-    octokit: octokit,
-    commentHandler: new CommentHandler(),
-    adapters: {
-      supabase: supabaseAdapter,
-    },
-  } as unknown as ContextPlugin<"issue_comment.created">;
-  return {
-    context,
-    supabaseAdapter,
-  };
-}
-
-class SupabaseAdapterStub implements SupabaseAdapterContract {
-  calls: SaveXpRecordInput[] = [];
-  private readonly _xpTotals = new Map<number, UserXpTotal>();
-
-  location = {
-    getOrCreateIssueLocation: jest.fn(async () => 1),
-  };
-
-  xp = {
-    saveRecord: jest.fn(async (input: SaveXpRecordInput) => {
-      this.calls.push(input);
-      const current = this._xpTotals.get(input.userId) ?? { total: 0, permitCount: 0 };
-      const nextTotal = current.total + input.numericAmount;
-      const permitCount = current.permitCount > 0 ? current.permitCount : 1;
-      this._xpTotals.set(input.userId, {
-        total: nextTotal,
-        permitCount,
-      });
-    }),
-    getUserTotal: jest.fn(async (userId: number) => this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 }),
-  };
-
-  setUserTotal(userId: number, total: number, permitCount = 1) {
-    this._xpTotals.set(userId, { total, permitCount });
-  }
-}

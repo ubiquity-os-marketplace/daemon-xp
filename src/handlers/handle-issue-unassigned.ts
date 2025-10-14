@@ -67,6 +67,10 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     numericAmount: -malusAmount,
   });
   const currentTotal = await context.adapters.supabase.xp.getUserTotal(assignee.id);
+  if (context.config?.disableCommentPosting) {
+    context.logger.info("Comment posting disabled via configuration.");
+    return;
+  }
   await postMalusComment(context, {
     assignee,
     baseAmount: xpAmount,
