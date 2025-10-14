@@ -1,6 +1,7 @@
 {
   "name": "daemon-xp",
   "description": "Handles XP for users.",
+  "skipBotEvents": false,
   "ubiquity:listeners": [
     "issues.unassigned",
     "issue_comment.created",
