@@ -47,31 +47,30 @@ type UserXpUnavailable = {
 
 type UserXpResponse = UserXpSuccess | UserXpUnavailable;
 
-type JsonError = {
-  error: {
-    code: string;
-    message: string;
-  };
-};
-
 export async function handleXpRequest(request: Request, env: Env): Promise<Response> {
   if (request.method !== "GET") {
-    return jsonError(405, {
-      error: {
-        code: "method_not_allowed",
-        message: "Only GET requests are supported for this endpoint.",
+    return jsonResponse(
+      {
+        error: {
+          code: "method_not_allowed",
+          message: "Only GET requests are supported for this endpoint.",
+        },
       },
-    });
+      405
+    );
   }
 
   const usernames = extractUsernames(new URL(request.url));
   if (usernames.length === 0) {
-    return jsonError(400, {
-      error: {
-        code: "missing_usernames",
-        message: "At least one username is required. Provide it using the 'user' query parameter.",
+    return jsonResponse(
+      {
+        error: {
+          code: "missing_usernames",
+          message: "At least one username is required. Provide it using the 'user' query parameter.",
+        },
       },
-    });
+      400
+    );
   }
 
   const logger = createLogger(env);
@@ -83,12 +82,15 @@ export async function handleXpRequest(request: Request, env: Env): Promise<Respo
     return jsonResponse({ users });
   } catch (err) {
     logger.error("Failed to serve /xp request", { err });
-    return jsonError(502, {
-      error: {
-        code: "upstream_error",
-        message: "Unable to complete XP lookup at this time.",
+    return jsonResponse(
+      {
+        error: {
+          code: "upstream_error",
+          message: "Unable to complete XP lookup at this time.",
+        },
       },
-    });
+      502
+    );
   }
 }
 
@@ -178,8 +180,4 @@ function jsonResponse(body: unknown, status = 200): Response {
       "Content-Type": "application/json",
     },
   });
-}
-
-function jsonError(status: number, body: JsonError): Response {
-  return jsonResponse(body, status);
 }

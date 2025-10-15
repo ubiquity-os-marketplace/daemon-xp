@@ -4,11 +4,6 @@ import { formatHandle, formatXp, sanitizeHandle, shouldReturnNoData } from "../x
 
 const XP_COMMAND = "/xp";
 
-type XpCommandContext =
-  | ContextPlugin<"issue_comment.created">
-  | ContextPlugin<"pull_request_review_comment.created">
-  | ContextPlugin<"pull_request_review.submitted">;
-
 type ParsedCommand = {
   username?: string;
 };
@@ -24,7 +19,7 @@ type TargetUser = {
   id: number;
 };
 
-export async function handleXpCommand(context: XpCommandContext): Promise<boolean> {
+export async function handleXpCommand(context: ContextPlugin): Promise<boolean> {
   const commentBody = getCommentBody(context);
   if (!commentBody) {
     return false;
@@ -43,12 +38,12 @@ export async function handleXpCommand(context: XpCommandContext): Promise<boolea
   }
   const target = await resolveTargetUser(context, sender, parsed);
   if (!target) {
-    await postNoDataComment(context, parsed.username ?? sender.login);
+    await postComment(context, `I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`);
     return true;
   }
   const total = await context.adapters.supabase.xp.getUserTotal(target.id);
   if (shouldReturnNoData(total)) {
-    await postNoDataComment(context, target.login);
+    await postComment(context, `I don't have XP data for ${formatHandle(target.login)} yet.`);
     return true;
   }
   const formattedXp = formatXp(total.total);
@@ -56,7 +51,7 @@ export async function handleXpCommand(context: XpCommandContext): Promise<boolea
   return true;
 }
 
-function getCommentBody(context: XpCommandContext): string | undefined {
+function getCommentBody(context: ContextPlugin): string | undefined {
   if (context.eventName === "issue_comment.created") {
     const comment = (context.payload as { comment?: { body?: unknown } } | undefined)?.comment;
     return typeof comment?.body === "string" ? comment.body : undefined;
@@ -91,11 +86,11 @@ function parseCommand(body: string): ParsedCommand | null {
   return { username };
 }
 
-function getSender(context: XpCommandContext): Sender | undefined {
+function getSender(context: ContextPlugin): Sender | undefined {
   return (context.payload as { sender?: Sender } | undefined)?.sender;
 }
 
-async function resolveTargetUser(context: XpCommandContext, sender: Sender, parsed: ParsedCommand): Promise<TargetUser | undefined> {
+async function resolveTargetUser(context: ContextPlugin, sender: Sender, parsed: ParsedCommand): Promise<TargetUser | undefined> {
   if (!parsed.username) {
     if (typeof sender.id !== "number" || typeof sender.login !== "string") {
       return undefined;
@@ -131,11 +126,7 @@ function isNotFoundError(error: unknown): boolean {
   return status === 404;
 }
 
-async function postNoDataComment(context: XpCommandContext, login: string): Promise<void> {
-  await postComment(context, `I don't have XP data for ${formatHandle(login)} yet.`);
-}
-
-async function postComment(context: XpCommandContext, body: string): Promise<void> {
+async function postComment(context: ContextPlugin, body: string): Promise<void> {
   const logReturn = context.logger.info(body);
   await context.commentHandler.postComment(context, logReturn, { raw: true, updateComment: false });
 }
