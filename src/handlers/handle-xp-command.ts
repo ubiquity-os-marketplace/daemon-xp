@@ -1,5 +1,6 @@
 import { isBotActor } from "../github/is-bot-actor";
 import { ContextPlugin } from "../types/index";
+import { isIssueCommentCreatedEvent, isPullRequestReviewCommentCreatedEvent, isPullRequestReviewSubmittedEvent } from "../types/typeguards";
 import { formatHandle, formatXp, sanitizeHandle, shouldReturnNoData } from "../xp/utils";
 
 const XP_COMMAND = "/xp";
@@ -19,14 +20,14 @@ type TargetUser = {
   id: number;
 };
 
-export async function handleXpCommand(context: ContextPlugin): Promise<boolean> {
+export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   const commentBody = getCommentBody(context);
   if (!commentBody) {
-    return false;
+    return;
   }
   const parsed = parseCommand(commentBody);
   if (!parsed) {
-    return false;
+    return;
   }
   const sender = getSender(context);
   if (!sender || !sender.login || typeof sender.id !== "number") {
@@ -34,37 +35,30 @@ export async function handleXpCommand(context: ContextPlugin): Promise<boolean> 
   }
   if (isBotActor({ login: sender.login, type: sender.type })) {
     context.logger.info("Ignoring XP command from bot sender.");
-    return false;
+    return;
   }
   const target = await resolveTargetUser(context, sender, parsed);
   if (!target) {
     await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
-    return true;
+    return;
   }
   const total = await context.adapters.supabase.xp.getUserTotal(target.id);
   if (shouldReturnNoData(total)) {
     await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(target.login)} yet.`));
-    return true;
+    return;
   }
   const formattedXp = formatXp(total.total);
   await context.commentHandler.postComment(context, context.logger.info(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
-  return true;
 }
 
-function getCommentBody(context: ContextPlugin): string | undefined {
-  if (context.eventName === "issue_comment.created") {
-    const comment = (context.payload as { comment?: { body?: unknown } } | undefined)?.comment;
-    return typeof comment?.body === "string" ? comment.body : undefined;
+function getCommentBody(context: ContextPlugin): string | null {
+  if (isPullRequestReviewSubmittedEvent(context)) {
+    return context.payload.review.body;
   }
-  if (context.eventName === "pull_request_review_comment.created") {
-    const comment = (context.payload as { comment?: { body?: unknown } } | undefined)?.comment;
-    return typeof comment?.body === "string" ? comment.body : undefined;
+  if (isIssueCommentCreatedEvent(context) || isPullRequestReviewCommentCreatedEvent(context)) {
+    return context.payload.comment.body;
   }
-  if (context.eventName === "pull_request_review.submitted") {
-    const review = (context.payload as { review?: { body?: unknown } } | undefined)?.review;
-    return typeof review?.body === "string" ? review.body : undefined;
-  }
-  return undefined;
+  return null;
 }
 
 function parseCommand(body: string): ParsedCommand | null {
