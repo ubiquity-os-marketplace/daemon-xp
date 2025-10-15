@@ -27,7 +27,6 @@ async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, 
       .from("permits" as never)
       .select("amount")
       .eq("beneficiary_id", userId)
-      .not("token_id", "is", null)
       .range(from, from + pageSize - 1);
     if (permits.error) {
       throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
