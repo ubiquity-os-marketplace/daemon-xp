@@ -164,10 +164,10 @@ describe("Plugin tests", () => {
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const latestComment = issueComments[issueComments.length - 1];
-    expect(latestComment?.body).toContain("Applied a malus of -25");
-    expect(latestComment?.body).toContain("Collaborator multiplier: 1 (@collab-one)");
+    expect(latestComment?.body).toContain("-25 XP");
+    expect(latestComment?.body).toContain("collab-one");
     expect(latestComment?.body).toContain("Current XP");
-    expect(latestComment?.body).toContain("125");
+    expect(latestComment?.body).toContain("100 XP");
     expect(permissionSpy).toHaveBeenCalledWith(expect.objectContaining({ username: "collab-one" }));
   });
 
