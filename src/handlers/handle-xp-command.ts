@@ -38,16 +38,16 @@ export async function handleXpCommand(context: ContextPlugin): Promise<boolean> 
   }
   const target = await resolveTargetUser(context, sender, parsed);
   if (!target) {
-    await postComment(context, `I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`);
+    await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
     return true;
   }
   const total = await context.adapters.supabase.xp.getUserTotal(target.id);
   if (shouldReturnNoData(total)) {
-    await postComment(context, `I don't have XP data for ${formatHandle(target.login)} yet.`);
+    await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(target.login)} yet.`));
     return true;
   }
   const formattedXp = formatXp(total.total);
-  await postComment(context, `${formatHandle(target.login)} currently has ${formattedXp} XP.`);
+  await context.commentHandler.postComment(context, context.logger.info(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
   return true;
 }
 
@@ -124,9 +124,4 @@ function isNotFoundError(error: unknown): boolean {
   }
   const status = (error as { status?: number }).status;
   return status === 404;
-}
-
-async function postComment(context: ContextPlugin, body: string): Promise<void> {
-  const logReturn = context.logger.info(body);
-  await context.commentHandler.postComment(context, logReturn, { raw: true, updateComment: false });
 }
