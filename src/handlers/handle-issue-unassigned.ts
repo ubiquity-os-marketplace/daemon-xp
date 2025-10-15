@@ -73,11 +73,10 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
   }
   await postMalusComment(context, {
     assignee,
-    baseAmount: xpAmount,
     malusAmount,
     multiplier,
     collaborators,
-    currentTotal: currentTotal.total,
+    currentTotal: currentTotal.total - malusAmount,
     issueUrl,
   });
 }
@@ -114,7 +113,6 @@ async function resolveCollaboratorMultiplier(context: ContextPlugin<"issues.unas
 
 type MalusCommentDetails = {
   assignee: NonNullable<ContextPlugin<"issues.unassigned">["payload"]["assignee"]>;
-  baseAmount: number;
   malusAmount: number;
   multiplier: number;
   collaborators: Awaited<ReturnType<typeof filterCollaborators>>;
@@ -125,27 +123,19 @@ type MalusCommentDetails = {
 async function postMalusComment(context: ContextPlugin<"issues.unassigned">, details: MalusCommentDetails): Promise<void> {
   const assigneeHandle = getDisplayHandle(details.assignee.login, details.assignee.id);
   const collaboratorHandles = details.collaborators.map((item) => toCode(getDisplayHandle(item.login, item.id)));
-  const formattedBase = formatXp(details.baseAmount);
   const formattedMalus = formatXp(details.malusAmount);
   const formattedTotal = formatXp(details.currentTotal);
   const collaboratorText = collaboratorHandles.length > 0 ? collaboratorHandles.join(", ") : toCode("None");
   const assigneeCode = toCode(assigneeHandle);
-  const baseValue = toCode(formattedBase + " XP");
   const multiplierValue = toCode(String(details.multiplier) + "x");
   const malusValue = toCode("-" + formattedMalus + " XP");
   const totalValue = toCode(formattedTotal + " XP");
   const lines = [
     "### XP Malus Applied",
     "",
-    "```text",
-    `Issue: ${details.issueUrl}`,
-    `Assignee: ${assigneeHandle}`,
-    "```",
-    "",
     "| Field | Value |",
     "| --- | --- |",
     `| Assignee | ${assigneeCode} |`,
-    `| Base XP | ${baseValue} |`,
     `| Collaborator Multiplier | ${multiplierValue} |`,
     `| Collaborators | ${collaboratorText} |`,
     `| Applied Malus | ${malusValue} |`,
