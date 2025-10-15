@@ -1,15 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { randomUUID } from "node:crypto";
 import Decimal from "decimal.js";
 import { keccak256, toUtf8Bytes } from "ethers";
+import { randomUUID } from "node:crypto";
 import { ContextPlugin } from "../../../types/index";
 import { SaveXpRecordInput } from "../../../types/supabase";
 import { Database } from "../generated-types";
 import { getOrCreateIssueLocation } from "../location/get-or-create-issue-location";
+import { BASE_UNIT } from "./get-user-total";
 
 export async function saveXpRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: SaveXpRecordInput): Promise<void> {
   const { userId, issue, numericAmount } = input;
-  context.logger.info(`Attempting to save XP for userId: ${userId}, issueId: ${issue.issueId}, amount: ${numericAmount}`);
+  context.logger.debug(`Attempting to save XP for userId: ${userId}, issueId: ${issue.issueId}, amount: ${numericAmount}`);
   const userLookup = await client.from("users").select("id").eq("id", userId).maybeSingle();
   let beneficiaryId: number;
   if (userLookup.error) {
@@ -27,7 +28,7 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
     beneficiaryId = userLookup.data.id;
   }
   const locationId = await getOrCreateIssueLocation(context, client, issue);
-  const amountString = new Decimal(numericAmount).mul(new Decimal(10).pow(18)).toFixed();
+  const amountString = new Decimal(numericAmount).mul(BASE_UNIT).toFixed();
   const permitLookup = await client
     .from("permits")
     .select("id")
@@ -39,12 +40,12 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
     throw context.logger.error("Error checking for duplicate XP records", { permitLookupError: permitLookup.error });
   }
   if (permitLookup.data) {
-    context.logger.info(`Existing XP record found for userId ${userId} on issue ${issue.issueId}. Updating amount.`);
+    context.logger.debug(`Existing XP record found for userId ${userId} on issue ${issue.issueId}. Updating amount.`);
     const permitUpdate = await client.from("permits").update({ amount: amountString }).eq("id", permitLookup.data.id);
     if (permitUpdate.error) {
       throw context.logger.error("Failed to update XP record in database", { permitUpdateError: permitUpdate.error });
     }
-    context.logger.ok(`XP record updated successfully for userId: ${userId}, issueId: ${issue.issueId}`);
+    context.logger.info(`XP record updated successfully for userId: ${userId}, issueId: ${issue.issueId}`);
     return;
   }
   const nonce = BigInt(keccak256(toUtf8Bytes(`${userId}-${issue.issueId}`))).toString();
@@ -61,5 +62,5 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
   if (permitInsert.error) {
     throw context.logger.error("Failed to insert XP record into database", { permitInsertError: permitInsert.error });
   }
-  context.logger.ok(`XP record inserted successfully for userId: ${userId}, issueId: ${issue.issueId}`);
+  context.logger.info(`XP record inserted successfully for userId: ${userId}, issueId: ${issue.issueId}`);
 }

@@ -14,7 +14,7 @@ import { server } from "./__mocks__/node";
 import { createIssueCommentContext, createUnassignedContext, SupabaseAdapterStub } from "./__mocks__/test-context";
 
 const octokit = new Octokit();
-type GetUserTotalWithLogger = typeof import("../src/adapters/supabase/xp/get-user-total").getUserTotalWithLogger;
+type FetchUserTotal = typeof import("../src/adapters/supabase/xp/get-user-total").fetchUserTotal;
 
 beforeAll(() => {
   server.listen();
@@ -211,14 +211,14 @@ describe("Plugin tests", () => {
   });
 
   it("Should return XP data from the /xp endpoint", async () => {
-    const getUserTotalWithLoggerMock: jest.MockedFunction<GetUserTotalWithLogger> = jest.fn(async (...args: Parameters<GetUserTotalWithLogger>) => {
+    const fetchUserTotalMock: jest.MockedFunction<FetchUserTotal> = jest.fn(async (...args: Parameters<FetchUserTotal>) => {
       const [, , userId] = args;
       if (userId === 1) {
         return { total: 12.5, permitCount: 3 };
       }
       return { total: 0, permitCount: 0 };
     });
-    overrideXpRequestDependencies({ getUserTotal: getUserTotalWithLoggerMock });
+    overrideXpRequestDependencies({ getUserTotal: fetchUserTotalMock });
     const worker = (await import("../src/worker")).default;
 
     const response = await worker.fetch(new Request("http://localhost/xp?user=user1"), {
@@ -239,19 +239,19 @@ describe("Plugin tests", () => {
         },
       ],
     });
-    expect(getUserTotalWithLoggerMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
+    expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
   });
 
   it("Should return unavailable entries for usernames without XP data", async () => {
     db.users.create({ id: 3, name: "user3", login: "user3" });
-    const getUserTotalWithLoggerMock: jest.MockedFunction<GetUserTotalWithLogger> = jest.fn(async (...args: Parameters<GetUserTotalWithLogger>) => {
+    const fetchUserTotalMock: jest.MockedFunction<FetchUserTotal> = jest.fn(async (...args: Parameters<FetchUserTotal>) => {
       const [, , userId] = args;
       if (userId === 3) {
         return { total: 0, permitCount: 0 };
       }
       return { total: 4, permitCount: 1 };
     });
-    overrideXpRequestDependencies({ getUserTotal: getUserTotalWithLoggerMock });
+    overrideXpRequestDependencies({ getUserTotal: fetchUserTotalMock });
     const worker = (await import("../src/worker")).default;
 
     const response = await worker.fetch(new Request("http://localhost/xp?user=user3&user=missing-user"), {
@@ -275,7 +275,7 @@ describe("Plugin tests", () => {
         },
       ],
     });
-    expect(getUserTotalWithLoggerMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3);
+    expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3);
   });
 
   it("Should reject /xp requests without usernames", async () => {

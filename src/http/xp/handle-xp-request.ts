@@ -2,19 +2,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
 import { LOG_LEVEL, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Database } from "../../adapters/supabase/generated-types";
-import { Logger, getUserTotalWithLogger } from "../../adapters/supabase/xp/get-user-total";
+import { fetchUserTotal } from "../../adapters/supabase/xp/get-user-total";
 import { Env } from "../../types/index";
 import { formatHandle, sanitizeHandle, shouldReturnNoData } from "../../xp/utils";
 import { fetchGitHubUser } from "./fetch-github-user";
 
 type XpRequestDependencies = {
   fetchGitHubUser: typeof fetchGitHubUser;
-  getUserTotal: typeof getUserTotalWithLogger;
+  getUserTotal: typeof fetchUserTotal;
 };
 
 let dependencies: XpRequestDependencies = {
   fetchGitHubUser,
-  getUserTotal: getUserTotalWithLogger,
+  getUserTotal: fetchUserTotal,
 };
 
 export function overrideXpRequestDependencies(overrides: Partial<XpRequestDependencies>) {
@@ -27,7 +27,7 @@ export function overrideXpRequestDependencies(overrides: Partial<XpRequestDepend
 export function resetXpRequestDependencies() {
   dependencies = {
     fetchGitHubUser,
-    getUserTotal: getUserTotalWithLogger,
+    getUserTotal: fetchUserTotal,
   };
 }
 
@@ -92,7 +92,7 @@ export async function handleXpRequest(request: Request, env: Env): Promise<Respo
   }
 }
 
-async function resolveUserXp(username: string, token: string | undefined, supabase: SupabaseClient<Database>, logger: Logger): Promise<UserXpResponse> {
+async function resolveUserXp(username: string, token: string | undefined, supabase: SupabaseClient<Database>, logger: Logs): Promise<UserXpResponse> {
   const githubUser = await dependencies.fetchGitHubUser(username, token);
   if (!githubUser) {
     return {

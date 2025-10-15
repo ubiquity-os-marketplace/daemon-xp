@@ -1,37 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import Decimal from "decimal.js";
-import { ContextPlugin } from "../../../types/index";
 import { UserXpTotal } from "../../../types/supabase";
 import { Database } from "../generated-types";
 
-const BASE_UNIT = new Decimal(10).pow(18);
+export const BASE_UNIT = new Decimal(10).pow(18);
 
-export type Logger = Pick<ContextPlugin["logger"], "info" | "ok" | "error">;
-
-export async function getUserTotal(context: ContextPlugin, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
-  return fetchUserTotal(context.logger, client, userId);
-}
-
-export async function getUserTotalWithLogger(logger: Logger, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
-  return fetchUserTotal(logger, client, userId);
-}
-
-async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
-  logger.info(`Fetching XP permits for userId: ${userId}`);
+export async function fetchUserTotal(logger: Logs, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
+  logger.debug(`Fetching XP permits for userId: ${userId}`);
   const pageSize = 1000;
   let from = 0;
   let permitCount = 0;
   let total = new Decimal(0);
   while (true) {
     const permits = await client
-      .from("permits" as never)
+      .from("permits")
       .select("amount")
       .eq("beneficiary_id", userId)
       .range(from, from + pageSize - 1);
     if (permits.error) {
       throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
     }
-    const rows = (permits.data ?? []) as { amount: string | null }[];
+    const rows = permits.data ?? [];
     if (rows.length === 0) {
       break;
     }
@@ -53,7 +43,7 @@ async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, 
     };
   }
   const normalized = total.div(BASE_UNIT);
-  logger.ok(`XP permits fetched successfully for userId: ${userId}`);
+  logger.debug(`XP permits fetched successfully for userId: ${userId}`);
   return {
     total: normalized.toNumber(),
     permitCount,

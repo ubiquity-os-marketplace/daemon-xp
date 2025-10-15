@@ -3,7 +3,7 @@ import { ContextPlugin } from "../../types/index";
 import { IssueLocationInput, SaveXpRecordInput } from "../../types/supabase";
 import { Database } from "./generated-types";
 import { getOrCreateIssueLocation } from "./location/get-or-create-issue-location";
-import { getUserTotal } from "./xp/get-user-total";
+import { fetchUserTotal } from "./xp/get-user-total";
 import { saveXpRecord } from "./xp/save-record";
 
 export class SupabaseAdapter {
@@ -18,6 +18,6 @@ export class SupabaseAdapter {
 
   readonly xp = {
     saveRecord: (input: SaveXpRecordInput) => saveXpRecord(this._context, this._client, input),
-    getUserTotal: (userId: number) => getUserTotal(this._context, this._client, userId),
+    getUserTotal: (userId: number) => fetchUserTotal(this._context.logger, this._client, userId),
   };
 }

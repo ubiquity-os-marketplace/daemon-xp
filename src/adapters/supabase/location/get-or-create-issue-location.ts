@@ -23,6 +23,6 @@ export async function getOrCreateIssueLocation(context: ContextPlugin, client: S
   if (inserted.error || !inserted.data) {
     throw context.logger.error("Failed to create location in database", { locationInsertError: inserted.error });
   }
-  context.logger.ok(`Created new location for issue ${issue.issueId}`);
+  context.logger.info(`Created new location for issue ${issue.issueId}`);
   return inserted.data.id;
 }

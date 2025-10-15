@@ -143,7 +143,7 @@ async function postMalusComment(context: ContextPlugin<"issues.unassigned">, det
   ];
   const body = lines.join("\n");
   const logToken = context.logger.info(body);
-  await context.commentHandler.postComment(context, logToken, { raw: true, updateComment: false });
+  await context.commentHandler.postComment(context, logToken, { raw: true });
 }
 
 function getDisplayHandle(login: unknown, fallback: unknown): string {
