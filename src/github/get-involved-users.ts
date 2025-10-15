@@ -16,6 +16,7 @@ export async function getInvolvedUsers(context: ContextPlugin<"issues.unassigned
     return [];
   }
   const participants = new Map<number, InvolvedUser>();
+  addParticipant(participants, context.payload.issue.user);
   const comments = await context.octokit.paginate(context.octokit.rest.issues.listComments, {
     owner: ownerLogin,
     repo: repositoryName,
@@ -37,44 +38,29 @@ export async function getInvolvedUsers(context: ContextPlugin<"issues.unassigned
 
 function collectParticipantsFromComments(store: Map<number, InvolvedUser>, comments: IssueComment[]) {
   for (const comment of comments) {
-    const user = comment?.user;
-    if (!user) {
-      continue;
-    }
-    if (typeof user.id !== "number" || typeof user.login !== "string") {
-      continue;
-    }
-    if (user.login.length === 0) {
-      continue;
-    }
-    if (store.has(user.id)) {
-      continue;
-    }
-    store.set(user.id, {
-      id: user.id,
-      login: user.login,
-    });
+    addParticipant(store, comment?.user);
   }
 }
 
 function collectParticipantsFromReviews(store: Map<number, InvolvedUser>, reviews: PullRequestReview[]) {
   for (const review of reviews) {
-    const user = review?.user;
-    if (!user) {
-      continue;
-    }
-    if (typeof user.id !== "number" || typeof user.login !== "string") {
-      continue;
-    }
-    if (user.login.length === 0) {
-      continue;
-    }
-    if (store.has(user.id)) {
-      continue;
-    }
-    store.set(user.id, {
-      id: user.id,
-      login: user.login,
-    });
+    addParticipant(store, review?.user);
   }
+}
+
+function addParticipant(store: Map<number, InvolvedUser>, candidate: { id?: unknown; login?: unknown } | null | undefined) {
+  if (!candidate) {
+    return;
+  }
+  const { id, login } = candidate;
+  if (typeof id !== "number" || typeof login !== "string" || login.length === 0) {
+    return;
+  }
+  if (store.has(id)) {
+    return;
+  }
+  store.set(id, {
+    id,
+    login,
+  });
 }

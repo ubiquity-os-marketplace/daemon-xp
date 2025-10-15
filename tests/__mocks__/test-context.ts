@@ -39,6 +39,7 @@ type CreateUnassignedContextOptions = {
   includePriceLabel?: boolean;
   config?: Partial<PluginSettings>;
   octokit: ContextPlugin["octokit"];
+  issueAuthorId?: number;
 };
 
 export function createUnassignedContext(options: CreateUnassignedContextOptions) {
@@ -67,6 +68,16 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
     ...assigneeRecord,
     type: "User",
   } as unknown as ContextPlugin<"issues.unassigned">["payload"]["assignee"];
+  if (typeof options.issueAuthorId === "number") {
+    const authorRecord = db.users.findFirst({ where: { id: { equals: options.issueAuthorId } } });
+    if (authorRecord) {
+      issue.user = {
+        id: authorRecord.id,
+        login: authorRecord.login,
+        type: "User",
+      } as unknown as NonNullable<typeof issue.user>;
+    }
+  }
   const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
   if (options.includeTimeline !== false) {
     createTimelineEvent(issue.number, {

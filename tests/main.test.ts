@@ -90,6 +90,37 @@ describe("Plugin tests", () => {
     expect(supabase.calls[0]?.numericAmount).toBe(-(price * 2));
   });
 
+  it("Should include the issue author when collecting collaborators", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const author = db.users.create({ id: 1001, name: "Issue Author", login: "issue-author" });
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: "Price: 15 USD",
+      octokit,
+      issueAuthorId: author.id,
+    });
+    jest.spyOn(context.octokit, "paginate").mockImplementation(async () => []);
+    jest.spyOn(context.octokit.rest.orgs, "getMembershipForUser").mockImplementation(async () => {
+      const error = new Error("Not Found") as Error & { status?: number };
+      error.status = 404;
+      throw error;
+    });
+    jest
+      .spyOn(context.octokit.rest.repos, "getCollaboratorPermissionLevel")
+      .mockImplementation(async (args: Parameters<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>[0]) => {
+        const { username } = (args ?? { username: "" }) as { username: string };
+        if (username === author.login) {
+          return { data: { permission: "write" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
+        }
+        return { data: { permission: "read" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
+      });
+    const involvedUsers = await getInvolvedUsers(context);
+    expect(involvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining([author.login]));
+    const collaborators = await filterCollaborators(context, involvedUsers);
+    expect(collaborators.map((user) => user.login)).toEqual(expect.arrayContaining([author.login]));
+  });
+
   it("Should post a malus summary comment including collaborator multiplier and current XP", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 25;
