@@ -6,7 +6,9 @@ import { Database } from "../generated-types";
 
 export const BASE_UNIT = new Decimal(10).pow(18);
 
-export async function fetchUserTotal(logger: Logs, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
+type Logger = Pick<Logs, "info" | "debug" | "error">;
+
+export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
   logger.debug(`Fetching XP permits for userId: ${userId}`);
   const pageSize = 1000;
   let from = 0;
