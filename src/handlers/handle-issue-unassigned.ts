@@ -18,8 +18,8 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     context.logger.info(`No unassignment timeline events found for userId ${assignee.id}.`);
     return;
   }
-  const actor = "actor" in timelineEvent ? toActorLike(timelineEvent.actor) : undefined;
-  if (!isBotActor(actor)) {
+  const actor = "actor" in timelineEvent ? timelineEvent.actor : undefined;
+  if (!isActorLike(actor) || !isBotActor(actor)) {
     context.logger.info("Unassignment was not performed by a bot. Skipping XP deduction.");
     return;
   }
@@ -145,17 +145,14 @@ async function postMalusComment(context: ContextPlugin<"issues.unassigned">, det
   await context.commentHandler.postComment(context, context.logger.info(body));
 }
 
-function toActorLike(actor: unknown): { login?: string; type?: string } | undefined {
+function isActorLike(actor: unknown): actor is { login?: string | null; type?: string | null } {
   if (!actor || typeof actor !== "object") {
-    return undefined;
+    return false;
   }
   const candidate = actor as { login?: unknown; type?: unknown };
-  const login = typeof candidate.login === "string" ? candidate.login : undefined;
-  const type = typeof candidate.type === "string" ? candidate.type : undefined;
-  if (!login && !type) {
-    return undefined;
-  }
-  return { login, type };
+  const hasLogin = typeof candidate.login === "string";
+  const hasType = typeof candidate.type === "string";
+  return hasLogin || hasType;
 }
 
 function getDisplayHandle(login: unknown, fallback: unknown): string {
