@@ -88,5 +88,8 @@ export const db = factory({
     created_at: String,
     actor: nullable(Object),
     assignee: nullable(Object),
+    body: nullable(String),
+    body_html: nullable(String),
+    body_text: nullable(String),
   },
 });

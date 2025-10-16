@@ -43,10 +43,16 @@ describe("Plugin tests", () => {
     expect(content).toEqual(manifest);
   });
 
-  it("Should create a negative XP record scaled by the issue price when the bot unassigns a user", async () => {
+  it("Should create a negative XP record when a disqualifier comment precedes the bot unassignment", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 42.5;
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      octokit,
+    });
     await runPlugin(context);
 
     expect(supabase.calls).toHaveLength(1);
@@ -54,10 +60,31 @@ describe("Plugin tests", () => {
     expect(supabase.calls[0]?.userId).toBe(context.payload.assignee?.id);
   });
 
+  it("Should not create a negative XP record when the disqualifier marker is missing", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 42.5;
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      octokit,
+    });
+
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(0);
+  });
+
   it("Should scale the malus by the number of collaborators involved", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 55;
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      octokit,
+    });
     const assigneeId = context.payload.assignee?.id;
     if (typeof assigneeId === "number") {
       supabase.setUserTotal(assigneeId, 200, 2);
@@ -99,6 +126,7 @@ describe("Plugin tests", () => {
       priceLabel: "Price: 15 USD",
       octokit,
       issueAuthorId: author.id,
+      includeDisqualifierComment: true,
     });
     jest.spyOn(context.octokit, "paginate").mockImplementation(async () => []);
     jest.spyOn(context.octokit.rest.orgs, "getMembershipForUser").mockImplementation(async () => {
@@ -124,7 +152,13 @@ describe("Plugin tests", () => {
   it("Should post a malus summary comment including collaborator multiplier and current XP", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 25;
-    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      octokit,
+    });
     const assigneeId = context.payload.assignee?.id;
     if (typeof assigneeId === "number") {
       supabase.setUserTotal(assigneeId, 150, 2);

@@ -38,6 +38,7 @@ describe("Configuration", () => {
       timelineActorType: "Bot",
       priceLabel: "Price: 20",
       config: { disableCommentPosting: true },
+      includeDisqualifierComment: true,
       octokit,
     });
     const commentCountBefore = db.issueComments.count();

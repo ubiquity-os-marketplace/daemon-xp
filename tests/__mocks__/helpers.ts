@@ -81,14 +81,20 @@ export function createTimelineEvent(
     assignee?: Record<string, unknown> | null;
     created_at?: string;
     eventName?: string;
+    body?: string;
+    body_html?: string;
+    body_text?: string;
   } = {}
 ) {
   db.issueTimelineEvent.create({
-    id: event.id ?? Date.now(),
+    id: event.id ?? db.issueTimelineEvent.count() + 1,
     issue_number: issueNumber,
     event: event.eventName ?? "unassigned",
     created_at: event.created_at ?? new Date().toISOString(),
     actor: event.actor ?? null,
     assignee: event.assignee ?? null,
+    body: event.body ?? null,
+    body_html: event.body_html ?? null,
+    body_text: event.body_text ?? null,
   });
 }

@@ -40,6 +40,7 @@ type CreateUnassignedContextOptions = {
   config?: Partial<PluginSettings>;
   octokit: ContextPlugin["octokit"];
   issueAuthorId?: number;
+  includeDisqualifierComment?: boolean;
 };
 
 export function createUnassignedContext(options: CreateUnassignedContextOptions) {
@@ -80,6 +81,20 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
   }
   const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
   if (options.includeTimeline !== false) {
+    if (options.includeDisqualifierComment) {
+      createTimelineEvent(issue.number, {
+        actor: {
+          id: sender.id,
+          login: sender.login,
+          type: "Bot",
+        },
+        created_at: new Date(Date.now() - 1000).toISOString(),
+        eventName: "commented",
+        body: "<!-- @ubiquity-os/daemon-disqualifier -->\nDisqualified due to inactivity.",
+        body_html: "<!-- @ubiquity-os/daemon-disqualifier -->",
+        body_text: "Disqualified due to inactivity.",
+      });
+    }
     createTimelineEvent(issue.number, {
       actor: {
         id: sender.id,

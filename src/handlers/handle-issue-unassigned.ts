@@ -1,7 +1,8 @@
 import { filterCollaborators } from "../github/filter-collaborators";
+import { findLatestDisqualifierComment } from "../github/find-latest-disqualifier-comment";
 import { findLatestUnassignmentEvent } from "../github/find-latest-unassignment-event";
 import { getInvolvedUsers } from "../github/get-involved-users";
-import { getIssueTimeline } from "../github/get-issue-timeline";
+import { getIssueTimeline, IssueTimelineEvent } from "../github/get-issue-timeline";
 import { isBotActor } from "../github/is-bot-actor";
 import { ContextPlugin } from "../types/index";
 import { formatXp, sanitizeHandle } from "../xp/utils";
@@ -21,6 +22,16 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
   const actor = "actor" in timelineEvent ? timelineEvent.actor : undefined;
   if (!isActorLike(actor) || !isBotActor(actor)) {
     context.logger.info("Unassignment was not performed by a bot. Skipping XP deduction.");
+    return;
+  }
+  const unassignmentDate = extractCreatedAt(timelineEvent);
+  if (!unassignmentDate) {
+    context.logger.info("Unassignment event did not contain a valid timestamp. Skipping XP deduction.");
+    return;
+  }
+  const disqualifierComment = findLatestDisqualifierComment(timeline, unassignmentDate);
+  if (!disqualifierComment) {
+    context.logger.info("No disqualification marker found near unassignment. Skipping XP deduction.");
     return;
   }
   const issueId = Number(context.payload.issue.id ?? context.payload.issue.number);
@@ -153,6 +164,21 @@ function isActorLike(actor: unknown): actor is { login?: string | null; type?: s
   const hasLogin = typeof candidate.login === "string";
   const hasType = typeof candidate.type === "string";
   return hasLogin || hasType;
+}
+
+function extractCreatedAt(event: IssueTimelineEvent): Date | null {
+  if (!("created_at" in event)) {
+    return null;
+  }
+  const value = (event as { created_at?: string | null }).created_at;
+  if (typeof value !== "string") {
+    return null;
+  }
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    return null;
+  }
+  return date;
 }
 
 function getDisplayHandle(login: unknown, fallback: unknown): string {
