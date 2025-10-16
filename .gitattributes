@@ -1,4 +1,4 @@
 dist/** linguist-generated
 *.lockb linguist-generated
 *.lock linguist-generated
-src/adapters/generated-types.ts linguist-generated
+src/adapters/supabase/generated-types.ts linguist-generated
