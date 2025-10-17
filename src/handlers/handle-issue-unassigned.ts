@@ -78,6 +78,11 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     numericAmount: -malusAmount,
   });
   const currentTotal = await context.adapters.supabase.xp.getUserTotal(assignee.id);
+  const totalAfterMalus = currentTotal.total - malusAmount;
+  await maybeBanAssignee(context, {
+    assignee,
+    totalAfterMalus,
+  });
   if (context.config?.disableCommentPosting) {
     context.logger.info("Comment posting disabled via configuration.");
     return;
@@ -87,7 +92,7 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     malusAmount,
     multiplier,
     collaborators,
-    currentTotal: currentTotal.total - malusAmount,
+    currentTotal: totalAfterMalus,
     issueUrl,
   });
 }
@@ -130,6 +135,43 @@ type MalusCommentDetails = {
   currentTotal: number;
   issueUrl: string;
 };
+
+type BanDetails = {
+  assignee: NonNullable<ContextPlugin<"issues.unassigned">["payload"]["assignee"]>;
+  totalAfterMalus: number;
+};
+
+async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, details: BanDetails): Promise<void> {
+  const threshold = context.config?.disqualificationBanThreshold;
+  if (typeof threshold !== "number" || !Number.isFinite(threshold)) {
+    return;
+  }
+  if (details.totalAfterMalus >= threshold) {
+    return;
+  }
+  const orgLogin = context.payload.organization?.login;
+  if (typeof orgLogin !== "string" || orgLogin.trim().length === 0) {
+    throw context.logger.error("Organization login missing from payload. Cannot ban user.");
+  }
+  const assigneeLogin = details.assignee.login;
+  if (typeof assigneeLogin !== "string" || assigneeLogin.trim().length === 0) {
+    throw context.logger.error("Assignee login missing from payload. Cannot ban user.");
+  }
+  context.logger.info(`XP total fell below threshold (${details.totalAfterMalus} < ${threshold}). Banning ${assigneeLogin} from ${orgLogin}.`);
+  try {
+    await context.octokit.rest.orgs.blockUser({
+      org: orgLogin,
+      username: assigneeLogin,
+    });
+    context.logger.info(`Successfully banned ${assigneeLogin} from ${orgLogin}.`);
+  } catch (error) {
+    if (error instanceof Error) {
+      throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { banError: error });
+    }
+    const fallback = new Error(String(error));
+    throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { banError: fallback });
+  }
+}
 
 async function postMalusComment(context: ContextPlugin<"issues.unassigned">, details: MalusCommentDetails): Promise<void> {
   const assigneeHandle = getDisplayHandle(details.assignee.login, details.assignee.id);

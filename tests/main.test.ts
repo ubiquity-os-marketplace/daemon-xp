@@ -205,6 +205,38 @@ describe("Plugin tests", () => {
     expect(permissionSpy).toHaveBeenCalledWith(expect.objectContaining({ username: "collab-one" }));
   });
 
+  it("Should ban the assignee when XP falls below the configured threshold after malus", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 20;
+    const threshold = 25;
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      config: { disqualificationBanThreshold: threshold },
+      octokit,
+    });
+    const assigneeId = context.payload.assignee?.id;
+    if (typeof assigneeId === "number") {
+      supabase.setUserTotal(assigneeId, 30, 2);
+    }
+    const orgLogin = context.payload.organization?.login;
+    const assigneeLogin = context.payload.assignee?.login;
+    if (typeof orgLogin !== "string" || typeof assigneeLogin !== "string") {
+      throw new Error("Test context missing organization or assignee login");
+    }
+    const blockSpy = jest
+      .spyOn(context.octokit.rest.orgs, "blockUser")
+      .mockResolvedValue({} as Awaited<ReturnType<typeof context.octokit.rest.orgs.blockUser>>);
+    await runPlugin(context);
+
+    expect(blockSpy).toHaveBeenCalledWith({
+      org: orgLogin,
+      username: assigneeLogin,
+    });
+  });
+
   it("Should not create an XP record when the unassignment is not from a bot", async () => {
     const supabase = new SupabaseAdapterStub();
     const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "User", octokit });
