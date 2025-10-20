@@ -157,7 +157,12 @@ async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, det
   if (typeof assigneeLogin !== "string" || assigneeLogin.trim().length === 0) {
     throw context.logger.error("Assignee login missing from payload. Cannot ban user.");
   }
-  context.logger.info(`XP total fell below threshold (${details.totalAfterMalus} < ${threshold}). Banning ${assigneeLogin} from ${orgLogin}.`);
+  const banMessage = context.logger.warn(
+    `XP total fell below threshold (${details.totalAfterMalus} < ${threshold}). Banning ${assigneeLogin} from \`${orgLogin}\`.`
+  );
+  if (!context.config.disableCommentPosting) {
+    await context.commentHandler.postComment(context, banMessage);
+  }
   try {
     await context.octokit.rest.orgs.blockUser({
       org: orgLogin,
