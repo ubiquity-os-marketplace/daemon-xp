@@ -36,7 +36,7 @@
   "dependencies": {
     "@sinclair/typebox": "0.34.41",
     "@supabase/supabase-js": "^2.74.0",
-    "@ubiquity-os/plugin-sdk": "3.3.0",
+    "@ubiquity-os/plugin-sdk": "3.3.4",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
     "decimal.js": "^10.6.0",
     "ethers": "^6.15.0",
