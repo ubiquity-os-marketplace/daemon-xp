@@ -143,22 +143,18 @@ type BanDetails = {
 
 async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, details: BanDetails): Promise<void> {
   const threshold = context.config?.disqualificationBanThreshold;
-  if (typeof threshold !== "number" || !Number.isFinite(threshold)) {
-    return;
-  }
+  const assigneeLogin = details.assignee.login;
+
   if (details.totalAfterMalus >= threshold) {
+    context.logger.info(`XP total (${details.totalAfterMalus}) is above threshold (${threshold}). Skipping ban for ${assigneeLogin}.`);
     return;
   }
   const orgLogin = context.payload.organization?.login;
   if (typeof orgLogin !== "string" || orgLogin.trim().length === 0) {
     throw context.logger.error("Organization login missing from payload. Cannot ban user.");
   }
-  const assigneeLogin = details.assignee.login;
-  if (typeof assigneeLogin !== "string" || assigneeLogin.trim().length === 0) {
-    throw context.logger.error("Assignee login missing from payload. Cannot ban user.");
-  }
   const banMessage = context.logger.warn(
-    `XP total fell below threshold (${details.totalAfterMalus} < ${threshold}). Banning ${assigneeLogin} from \`${orgLogin}\`.`
+    `XP total fell below threshold (${details.totalAfterMalus} < ${threshold}). Banning \`${assigneeLogin}\` from \`${orgLogin}\`.`
   );
   if (!context.config.disableCommentPosting) {
     await context.commentHandler.postComment(context, banMessage);
@@ -169,12 +165,8 @@ async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, det
       username: assigneeLogin,
     });
     context.logger.info(`Successfully banned ${assigneeLogin} from ${orgLogin}.`);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { banError: error });
-    }
-    const fallback = new Error(String(error));
-    throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { banError: fallback });
+  } catch (err) {
+    throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { err });
   }
 }
 
