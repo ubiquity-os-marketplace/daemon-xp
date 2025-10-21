@@ -1,7 +1,7 @@
 import { IssueTimelineEvent } from "./get-issue-timeline";
 import { isBotActor } from "./is-bot-actor";
 
-const DISQUALIFIER_MARKER = "@ubiquity-os/daemon-disqualifier";
+const DISQUALIFIER_MARKER = "daemon-disqualifier";
 const COMMENT_EVENT_NAMES = new Set(["commented", "timeline_comment"]);
 const DEFAULT_WINDOW_MS = 5 * 60 * 1000;
 
@@ -58,7 +58,32 @@ function isComment(event: IssueTimelineEvent): event is TimelineComment {
 function containsMarker(event: TimelineComment): boolean {
   const candidates = [event.body, event.body_text, event.body_html];
   for (const value of candidates) {
-    if (typeof value === "string" && value.includes(DISQUALIFIER_MARKER)) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    if (containsMetadataMarker(value)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Bot comments embed a hidden HTML comment where the last " - " segment names the posting workflow.
+function containsMetadataMarker(source: string): boolean {
+  const commentPattern = /<!--([\s\S]*?)-->/g;
+  let match: RegExpExecArray | null;
+  while ((match = commentPattern.exec(source)) !== null) {
+    const commentBody = match[1] ?? "";
+    const [firstLine = ""] = commentBody.split(/\r?\n/, 1);
+    const parts = firstLine
+      .split(/\s*-\s*/)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length < 4) {
+      continue;
+    }
+    const candidate = parts[parts.length - 1];
+    if (candidate.includes(DISQUALIFIER_MARKER)) {
       return true;
     }
   }
