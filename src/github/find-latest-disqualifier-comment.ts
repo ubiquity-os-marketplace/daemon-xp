@@ -3,7 +3,6 @@ import { isBotActor } from "./is-bot-actor";
 
 const DISQUALIFIER_MARKER = "daemon-disqualifier";
 const COMMENT_EVENT_NAMES = new Set(["commented", "timeline_comment"]);
-const DEFAULT_WINDOW_MS = 5 * 60 * 1000;
 
 type TimelineComment = IssueTimelineEvent & {
   created_at?: string;
@@ -13,7 +12,7 @@ type TimelineComment = IssueTimelineEvent & {
   actor?: { type?: string | null; login?: string | null } | null;
 };
 
-export function findLatestDisqualifierComment(events: IssueTimelineEvent[], unassignmentDate: Date, windowMs = DEFAULT_WINDOW_MS): TimelineComment | null {
+export function findLatestDisqualifierComment(events: IssueTimelineEvent[], unassignmentDate: Date): TimelineComment | null {
   if (!Number.isFinite(unassignmentDate.getTime())) {
     return null;
   }
@@ -34,7 +33,7 @@ export function findLatestDisqualifierComment(events: IssueTimelineEvent[], unas
       continue;
     }
     const timeDiff = unassignmentDate.getTime() - createdAt.getTime();
-    if (timeDiff < 0 || timeDiff > windowMs) {
+    if (timeDiff < 0) {
       continue;
     }
     const timestamp = createdAt.getTime();
