@@ -75,7 +75,7 @@ function containsMetadataMarker(source: string): boolean {
     const commentBody = match[1] ?? "";
     const [firstLine = ""] = commentBody.split(/\r?\n/, 1);
     const parts = firstLine
-      .split(/\s*-\s*/)
+      .split(/ - /)
       .map((part) => part.trim())
       .filter(Boolean);
     if (parts.length < 4) {
