@@ -79,10 +79,15 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
   });
   const currentTotal = await context.adapters.supabase.xp.getUserTotal(assignee.id);
   const totalAfterMalus = currentTotal.total - malusAmount;
-  await maybeBanAssignee(context, {
-    assignee,
-    totalAfterMalus,
-  });
+  if (
+    await maybeBanAssignee(context, {
+      assignee,
+      totalAfterMalus,
+    })
+  ) {
+    // Do not post malus XP as the user got banned anyway
+    return;
+  }
   if (context.config?.disableCommentPosting) {
     context.logger.info("Comment posting disabled via configuration.");
     return;
@@ -141,13 +146,13 @@ type BanDetails = {
   totalAfterMalus: number;
 };
 
-async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, details: BanDetails): Promise<void> {
+async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, details: BanDetails): Promise<boolean> {
   const threshold = context.config?.disqualificationBanThreshold;
   const assigneeLogin = details.assignee.login;
 
   if (details.totalAfterMalus >= threshold) {
     context.logger.info(`XP total (${details.totalAfterMalus}) is above threshold (${threshold}). Skipping ban for ${assigneeLogin}.`);
-    return;
+    return false;
   }
   const orgLogin = context.payload.organization?.login;
   if (typeof orgLogin !== "string" || orgLogin.trim().length === 0) {
@@ -165,6 +170,7 @@ async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, det
       username: assigneeLogin,
     });
     context.logger.info(`Successfully banned ${assigneeLogin} from ${orgLogin}.`);
+    return true;
   } catch (err) {
     throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { err });
   }
