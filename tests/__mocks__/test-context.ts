@@ -44,6 +44,10 @@ type CreateUnassignedContextOptions = {
 };
 
 export function createUnassignedContext(options: CreateUnassignedContextOptions) {
+  const defaultConfig = {
+    disableCommentPosting: false,
+    disqualificationBanThreshold: -2000,
+  } as const;
   if (options.includePriceLabel === false) {
     db.issue.update({
       where: { id: { equals: 1 } },
@@ -82,6 +86,7 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
   const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
   if (options.includeTimeline !== false) {
     if (options.includeDisqualifierComment) {
+      const marker = "<!-- Ubiquity OS - Daemon XP - Step - @ubiquity-os/daemon-disqualifier -->";
       createTimelineEvent(issue.number, {
         actor: {
           id: sender.id,
@@ -90,8 +95,8 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
         },
         created_at: new Date(Date.now() - 1000).toISOString(),
         eventName: "commented",
-        body: "<!-- @ubiquity-os/daemon-disqualifier -->\nDisqualified due to inactivity.",
-        body_html: "<!-- @ubiquity-os/daemon-disqualifier -->",
+        body: `${marker}\nDisqualified due to inactivity.`,
+        body_html: marker,
         body_text: "Disqualified due to inactivity.",
       });
     }
@@ -120,7 +125,7 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
       organization: { login: repo.owner.login } as ContextPlugin["payload"]["organization"],
     },
     logger: new Logs("debug"),
-    config: (options.config ?? {}) as PluginSettings,
+    config: { ...defaultConfig, ...(options.config ?? {}) } as PluginSettings,
     env: {
       SUPABASE_URL: "https://supabase.test",
       SUPABASE_KEY: "test-key",

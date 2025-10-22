@@ -51,6 +51,7 @@ describe("Plugin tests", () => {
       timelineActorType: "Bot",
       priceLabel: `Price: ${price} USD`,
       includeDisqualifierComment: true,
+      config: { disableCommentPosting: false, disqualificationBanThreshold: 0 },
       octokit,
     });
     await runPlugin(context);
@@ -83,8 +84,10 @@ describe("Plugin tests", () => {
       timelineActorType: "Bot",
       priceLabel: `Price: ${price} USD`,
       includeDisqualifierComment: true,
+      config: { disableCommentPosting: false, disqualificationBanThreshold: 100 },
       octokit,
     });
+    expect(context.config.disqualificationBanThreshold).toBe(100);
     const assigneeId = context.payload.assignee?.id;
     if (typeof assigneeId === "number") {
       supabase.setUserTotal(assigneeId, 200, 2);

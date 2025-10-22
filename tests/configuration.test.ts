@@ -37,7 +37,7 @@ describe("Configuration", () => {
       supabaseAdapter: supabase,
       timelineActorType: "Bot",
       priceLabel: "Price: 20",
-      config: { disableCommentPosting: true },
+      config: { disableCommentPosting: true, disqualificationBanThreshold: -100 },
       includeDisqualifierComment: true,
       octokit,
     });

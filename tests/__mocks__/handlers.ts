@@ -67,6 +67,7 @@ export const handlers = [
   }),
   http.get("https://api.github.com/orgs/:org/memberships/:username", () => new HttpResponse(null, { status: 404 })),
   http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", () => HttpResponse.json({ permission: "read" })),
+  http.put("https://api.github.com/orgs/:org/blocks/:username", () => new HttpResponse(null, { status: 204 })),
 ];
 
 async function getValue(body: ReadableStream<Uint8Array> | null) {
