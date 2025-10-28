@@ -27,7 +27,6 @@
         "cross-env": "^10.1.0",
         "cross-env-shell": "^7.0.3",
         "cspell": "9.2.2",
-        "dotenv": "^17.2.3",
         "dotenv-cli": "^10.0.0",
         "eslint": "9.38.0",
         "eslint-plugin-check-file": "3.3.0",
@@ -38,7 +37,7 @@
         "msw": "^2.11.5",
         "npm-run-all": "4.1.5",
         "prettier": "3.6.2",
-        "supabase": "^2.54.10",
+        "supabase": "^2.54.11",
         "typescript": "5.9.3",
         "typescript-eslint": "8.22.0",
       },
@@ -1093,7 +1092,7 @@
 
     "summary": ["summary@2.1.0", "", {}, "sha512-nMIjMrd5Z2nuB2RZCKJfFMjgS3fygbeyGk9PxPPaJR1RIcyN9yn4A63Isovzm3ZtQuEkLBVgMdPup8UeLH7aQw=="],
 
-    "supabase": ["supabase@2.54.10", "", { "dependencies": { "bin-links": "^6.0.0", "https-proxy-agent": "^7.0.2", "node-fetch": "^3.3.2", "tar": "7.5.1" }, "bin": { "supabase": "bin/supabase" } }, "sha512-gcbA0yORPuzYQiogJ927Opq8+yCloht8r3OoHgZtF/7/V2A6An4gTy0jKjVVlfUfDW1rm8sgKcdgzCQ1FT2sBA=="],
+    "supabase": ["supabase@2.54.11", "", { "dependencies": { "bin-links": "^6.0.0", "https-proxy-agent": "^7.0.2", "node-fetch": "^3.3.2", "tar": "7.5.1" }, "bin": { "supabase": "bin/supabase" } }, "sha512-KuDDVi1s2fhfun81LNPaCLpW4/LFsP3G2LKUQimzEoj64sP1DtZ/d97uw6GFYbNMPW9JC2Ruuei53qHInOwJLA=="],
 
     "supports-color": ["supports-color@7.2.0", "", { "dependencies": { "has-flag": "^4.0.0" } }, "sha512-qpCAvRl9stuOHveKsn7HncJRvv501qIacKzQlO/+Lwxc9+0q2wLyv4Dfvt80/DPn2pqOBsJdDiogXGR9+OvwRw=="],
 
