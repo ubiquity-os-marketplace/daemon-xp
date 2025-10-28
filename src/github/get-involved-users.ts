@@ -88,7 +88,9 @@ export async function collectLinkedPulls(context: ContextPlugin, issue: { owner:
     $include_closed_prs: includeClosed,
   });
 
-  return result.repository.issue.closedByPullRequestsReferences.edges.map((edge) => edge.node);
+  return result.repository.issue.closedByPullRequestsReferences.edges.map(
+    (edge: IssueWithClosedByPrs["repository"]["issue"]["closedByPullRequestsReferences"]["edges"][number]) => edge.node
+  );
 }
 
 export async function getInvolvedUsers(context: ContextPlugin<"issues.unassigned">): Promise<InvolvedUser[]> {
