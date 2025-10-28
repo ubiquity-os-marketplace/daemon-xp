@@ -36,7 +36,9 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
   }
   const issueId = Number(context.payload.issue.id ?? context.payload.issue.number);
   if (!Number.isFinite(issueId)) {
-    throw context.logger.error("Issue ID missing from payload. Cannot persist XP entry.");
+    throw context.logger.error("Issue ID missing from payload. Cannot persist XP entry.", {
+      issueId,
+    });
   }
   const issueUrl = context.payload.issue.html_url || context.payload.issue.url;
   if (!issueUrl) {
