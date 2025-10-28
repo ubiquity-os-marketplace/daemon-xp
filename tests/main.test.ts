@@ -63,9 +63,6 @@ describe("Plugin tests", () => {
     expect(supabase.calls).toHaveLength(1);
     expect(supabase.calls[0]?.numericAmount).toBe(-price);
     const negativeAssigneeId = context.payload.assignee?.id as number;
-    // if (typeof negativeAssigneeId !== "number") {
-    //   throw new Error("Test context missing assignee id");
-    // }
     expect(supabase.calls[0]?.userId).toBe(negativeAssigneeId);
   });
 
@@ -92,9 +89,6 @@ describe("Plugin tests", () => {
     });
     expect(context.config.disqualificationBanThreshold).toBe(100);
     const assigneeId = context.payload.assignee?.id as number;
-    // if (typeof assigneeId !== "number") {
-    //   throw new Error("Test context missing assignee id");
-    // }
     supabase.setUserTotal(assigneeId, 200, 2);
     const originalPaginate = context.octokit.paginate.bind(context.octokit);
     typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
@@ -166,9 +160,6 @@ describe("Plugin tests", () => {
         return HttpResponse.json({ permission: "read" });
       })
     );
-    // if (!context.payload.issue.user) {
-    //   throw new Error("Test context missing issue author");
-    // }
     expect(context.payload.issue.user?.login).toBe(author.login);
     const involvedUsers = await getInvolvedUsers(context);
     expect(involvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining([author.login]));
@@ -259,9 +250,6 @@ describe("Plugin tests", () => {
       octokit,
     });
     const assigneeId = context.payload.assignee?.id as number;
-    // if (typeof assigneeId !== "number") {
-    //   throw new Error("Test context missing assignee id");
-    // }
     supabase.setUserTotal(assigneeId, 30, 2);
     const orgLogin = context.payload.organization?.login;
     const assigneeLogin = context.payload.assignee?.login;
