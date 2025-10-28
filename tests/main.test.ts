@@ -1,6 +1,6 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { drop } from "@mswjs/data";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { http, HttpResponse } from "msw";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
@@ -16,13 +16,17 @@ import { createIssueCommentContext, createUnassignedContext, SupabaseAdapterStub
 const octokit = new Octokit();
 type FetchUserTotal = typeof import("../src/adapters/supabase/xp/get-user-total").fetchUserTotal;
 
+function typedSpyOn<TTarget extends object, TKey extends keyof TTarget>(target: TTarget, key: TKey) {
+  return spyOn(target as unknown as Record<TKey, (...args: unknown[]) => unknown>, key);
+}
+
 beforeAll(() => {
   server.listen();
 });
 afterEach(() => {
   server.resetHandlers();
-  jest.clearAllMocks();
-  jest.restoreAllMocks();
+  mock.clearAllMocks();
+  mock.restore();
   resetXpRequestDependencies();
 });
 afterAll(() => server.close());
@@ -58,18 +62,17 @@ describe("Plugin tests", () => {
 
     expect(supabase.calls).toHaveLength(1);
     expect(supabase.calls[0]?.numericAmount).toBe(-price);
-    expect(supabase.calls[0]?.userId).toBe(context.payload.assignee?.id);
+    const negativeAssigneeId = context.payload.assignee?.id as number;
+    // if (typeof negativeAssigneeId !== "number") {
+    //   throw new Error("Test context missing assignee id");
+    // }
+    expect(supabase.calls[0]?.userId).toBe(negativeAssigneeId);
   });
 
   it("Should not create a negative XP record when the disqualifier marker is missing", async () => {
     const supabase = new SupabaseAdapterStub();
     const price = 42.5;
-    const { context } = createUnassignedContext({
-      supabaseAdapter: supabase,
-      timelineActorType: "Bot",
-      priceLabel: `Price: ${price} USD`,
-      octokit,
-    });
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
 
     await runPlugin(context);
 
@@ -88,19 +91,34 @@ describe("Plugin tests", () => {
       octokit,
     });
     expect(context.config.disqualificationBanThreshold).toBe(100);
-    const assigneeId = context.payload.assignee?.id;
-    if (typeof assigneeId === "number") {
-      supabase.setUserTotal(assigneeId, 200, 2);
-    }
+    const assigneeId = context.payload.assignee?.id as number;
+    // if (typeof assigneeId !== "number") {
+    //   throw new Error("Test context missing assignee id");
+    // }
+    supabase.setUserTotal(assigneeId, 200, 2);
     const originalPaginate = context.octokit.paginate.bind(context.octokit);
-    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method: Parameters<typeof context.octokit.paginate>[0], params: string | undefined) => {
-      if (params && typeof params === "object" && "issue_number" in params && !("mediaType" in params) && !("pull_number" in params)) {
+    typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
+      const [method, params] = args as Parameters<typeof context.octokit.paginate>;
+      if (
+        method === context.octokit.rest.issues.listComments &&
+        params &&
+        typeof params === "object" &&
+        "issue_number" in params &&
+        !("pull_number" in params)
+      ) {
         return [
           { id: 501, user: { id: 901, login: "collab-one", type: "User" } },
           { id: 502, user: { id: 902, login: "collab-two", type: "User" } },
         ];
       }
-      if (params && typeof params === "object" && "pull_number" in params) {
+      if (
+        (method === context.octokit.rest.issues.listComments ||
+          method === context.octokit.rest.pulls.listReviews ||
+          method === context.octokit.rest.pulls.listReviewComments) &&
+        params &&
+        typeof params === "object" &&
+        "pull_number" in params
+      ) {
         return [];
       }
       return originalPaginate(method, params);
@@ -131,21 +149,27 @@ describe("Plugin tests", () => {
       issueAuthorId: author.id,
       includeDisqualifierComment: true,
     });
-    jest.spyOn(context.octokit, "paginate").mockImplementation(async () => []);
-    jest.spyOn(context.octokit.rest.orgs, "getMembershipForUser").mockImplementation(async () => {
-      const error = new Error("Not Found") as Error & { status?: number };
-      error.status = 404;
-      throw error;
+    const originalPaginate = context.octokit.paginate.bind(context.octokit);
+    typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
+      const [method, params] = args as Parameters<typeof context.octokit.paginate>;
+      if (method === context.octokit.rest.issues.listComments) {
+        return [];
+      }
+      return originalPaginate(method, params);
     });
-    jest
-      .spyOn(context.octokit.rest.repos, "getCollaboratorPermissionLevel")
-      .mockImplementation(async (args: Parameters<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>[0]) => {
-        const { username } = (args ?? { username: "" }) as { username: string };
+    server.use(
+      http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", ({ params }) => {
+        const { username } = params as { username: string };
         if (username === author.login) {
-          return { data: { permission: "write" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
+          return HttpResponse.json({ permission: "write" });
         }
-        return { data: { permission: "read" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
-      });
+        return HttpResponse.json({ permission: "read" });
+      })
+    );
+    // if (!context.payload.issue.user) {
+    //   throw new Error("Test context missing issue author");
+    // }
+    expect(context.payload.issue.user?.login).toBe(author.login);
     const involvedUsers = await getInvolvedUsers(context);
     expect(involvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining([author.login]));
     const collaborators = await filterCollaborators(context, involvedUsers);
@@ -163,32 +187,46 @@ describe("Plugin tests", () => {
       octokit,
     });
     const assigneeId = context.payload.assignee?.id;
-    if (typeof assigneeId === "number") {
-      supabase.setUserTotal(assigneeId, 150, 2);
+    if (typeof assigneeId !== "number") {
+      throw new Error("Test context missing assignee id");
     }
+    supabase.setUserTotal(assigneeId, 150, 2);
     const originalPaginate = context.octokit.paginate.bind(context.octokit);
-    jest.spyOn(context.octokit, "paginate").mockImplementation(async (method: Parameters<typeof context.octokit.paginate>[0], params: string | undefined) => {
-      if (params && typeof params === "object" && "issue_number" in params && !("mediaType" in params) && !("pull_number" in params)) {
+    typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
+      const [method, params] = args as Parameters<typeof context.octokit.paginate>;
+      if (
+        method === context.octokit.rest.issues.listComments &&
+        params &&
+        typeof params === "object" &&
+        "issue_number" in params &&
+        !("pull_number" in params)
+      ) {
         return [{ id: 503, user: { id: 903, login: "collab-one", type: "User" } }];
       }
-      if (params && typeof params === "object" && "pull_number" in params) {
+      if (
+        (method === context.octokit.rest.issues.listComments ||
+          method === context.octokit.rest.pulls.listReviews ||
+          method === context.octokit.rest.pulls.listReviewComments) &&
+        params &&
+        typeof params === "object" &&
+        "pull_number" in params
+      ) {
         return [];
       }
       return originalPaginate(method, params);
     });
-    jest.spyOn(context.octokit.rest.orgs, "getMembershipForUser").mockImplementation(async () => {
-      const error = new Error("Not Found") as Error & { status?: number };
-      error.status = 404;
-      throw error;
-    });
-    const permissionSpy = jest.spyOn(context.octokit.rest.repos, "getCollaboratorPermissionLevel");
-    permissionSpy.mockImplementation(async (args: Parameters<typeof octokit.rest.repos.getCollaboratorPermissionLevel>[0]) => {
-      const { username } = (args ?? { username: "" }) as { username: string };
-      if (username === "collab-one") {
-        return { data: { permission: "write" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
-      }
-      return { data: { permission: "read" } } as unknown as Awaited<ReturnType<typeof context.octokit.rest.repos.getCollaboratorPermissionLevel>>;
-    });
+    server.use(http.get("https://api.github.com/orgs/:org/memberships/:username", () => new HttpResponse(null, { status: 404 })));
+    const permissionRequests: string[] = [];
+    server.use(
+      http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", ({ params }) => {
+        const { username } = params as { username: string };
+        permissionRequests.push(username);
+        if (username === "collab-one") {
+          return HttpResponse.json({ permission: "write" });
+        }
+        return HttpResponse.json({ permission: "read" });
+      })
+    );
     const singleInvolvedUsers = await getInvolvedUsers(context);
     expect(singleInvolvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining(["collab-one"]));
     const singleCollaborators = await filterCollaborators(context, singleInvolvedUsers);
@@ -205,7 +243,7 @@ describe("Plugin tests", () => {
     expect(latestComment?.body).toContain("collab-one");
     expect(latestComment?.body).toContain("Current XP");
     expect(latestComment?.body).toContain("100 XP");
-    expect(permissionSpy).toHaveBeenCalledWith(expect.objectContaining({ username: "collab-one" }));
+    expect(permissionRequests).toContain("collab-one");
   });
 
   it("Should ban the assignee when XP falls below the configured threshold after malus", async () => {
@@ -220,24 +258,27 @@ describe("Plugin tests", () => {
       config: { disqualificationBanThreshold: threshold },
       octokit,
     });
-    const assigneeId = context.payload.assignee?.id;
-    if (typeof assigneeId === "number") {
-      supabase.setUserTotal(assigneeId, 30, 2);
-    }
+    const assigneeId = context.payload.assignee?.id as number;
+    // if (typeof assigneeId !== "number") {
+    //   throw new Error("Test context missing assignee id");
+    // }
+    supabase.setUserTotal(assigneeId, 30, 2);
     const orgLogin = context.payload.organization?.login;
     const assigneeLogin = context.payload.assignee?.login;
     if (typeof orgLogin !== "string" || typeof assigneeLogin !== "string") {
       throw new Error("Test context missing organization or assignee login");
     }
-    const blockSpy = jest
-      .spyOn(context.octokit.rest.orgs, "blockUser")
-      .mockResolvedValue({} as Awaited<ReturnType<typeof context.octokit.rest.orgs.blockUser>>);
+    const blockRequests: Array<{ org: string; username: string }> = [];
+    server.use(
+      http.put("https://api.github.com/orgs/:org/blocks/:username", ({ params }) => {
+        const { org, username } = params as { org: string; username: string };
+        blockRequests.push({ org, username });
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
     await runPlugin(context);
 
-    expect(blockSpy).toHaveBeenCalledWith({
-      org: orgLogin,
-      username: assigneeLogin,
-    });
+    expect(blockRequests).toEqual([{ org: orgLogin, username: assigneeLogin }]);
   });
 
   it("Should not create an XP record when the unassignment is not from a bot", async () => {
@@ -311,7 +352,7 @@ describe("Plugin tests", () => {
   });
 
   it("Should return XP data from the /xp endpoint", async () => {
-    const fetchUserTotalMock: jest.MockedFunction<FetchUserTotal> = jest.fn(async (...args: Parameters<FetchUserTotal>) => {
+    const fetchUserTotalMock = mock<FetchUserTotal>(async (...args: Parameters<FetchUserTotal>) => {
       const [, , userId] = args;
       if (userId === 1) {
         return { total: 12.5, permitCount: 3 };
@@ -328,23 +369,13 @@ describe("Plugin tests", () => {
 
     const payload = await response.json();
     expect(response.status).toBe(200);
-    expect(payload).toEqual({
-      users: [
-        {
-          login: "user1",
-          id: 1,
-          hasData: true,
-          total: 12.5,
-          permitCount: 3,
-        },
-      ],
-    });
+    expect(payload).toEqual({ users: [{ login: "user1", id: 1, hasData: true, total: 12.5, permitCount: 3 }] });
     expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
   });
 
   it("Should return unavailable entries for usernames without XP data", async () => {
     db.users.create({ id: 3, name: "user3", login: "user3" });
-    const fetchUserTotalMock: jest.MockedFunction<FetchUserTotal> = jest.fn(async (...args: Parameters<FetchUserTotal>) => {
+    const fetchUserTotalMock = mock<FetchUserTotal>(async (...args: Parameters<FetchUserTotal>) => {
       const [, , userId] = args;
       if (userId === 3) {
         return { total: 0, permitCount: 0 };
@@ -363,16 +394,8 @@ describe("Plugin tests", () => {
     expect(response.status).toBe(200);
     expect(payload).toEqual({
       users: [
-        {
-          login: "user3",
-          hasData: false,
-          message: "I don't have XP data for @user3 yet.",
-        },
-        {
-          login: "missing-user",
-          hasData: false,
-          message: "I don't have XP data for @missing-user yet.",
-        },
+        { login: "user3", hasData: false, message: "I don't have XP data for @user3 yet." },
+        { login: "missing-user", hasData: false, message: "I don't have XP data for @missing-user yet." },
       ],
     });
     expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3);
@@ -381,18 +404,12 @@ describe("Plugin tests", () => {
   it("Should reject /xp requests without usernames", async () => {
     const worker = (await import("../src/worker")).default;
 
-    const response = await worker.fetch(new Request("http://localhost/xp"), {
-      SUPABASE_URL: "https://supabase.test",
-      SUPABASE_KEY: "test-key",
-    } as Env);
+    const response = await worker.fetch(new Request("http://localhost/xp"), { SUPABASE_URL: "https://supabase.test", SUPABASE_KEY: "test-key" } as Env);
 
     const payload = await response.json();
     expect(response.status).toBe(400);
     expect(payload).toEqual({
-      error: {
-        code: "missing_usernames",
-        message: "At least one username is required. Provide it using the 'user' query parameter.",
-      },
+      error: { code: "missing_usernames", message: "At least one username is required. Provide it using the 'user' query parameter." },
     });
   });
 });

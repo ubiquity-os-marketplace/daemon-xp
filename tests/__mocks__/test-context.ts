@@ -1,6 +1,6 @@
-import { jest } from "@jest/globals";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { mock, spyOn } from "bun:test";
 import { ContextPlugin, Env, PluginSettings, SaveXpRecordInput, SupabaseAdapterContract, UserXpTotal } from "../../src/types/index";
 import { db } from "./db";
 import { createTimelineEvent } from "./helpers";
@@ -8,22 +8,17 @@ export class SupabaseAdapterStub implements SupabaseAdapterContract {
   calls: SaveXpRecordInput[] = [];
   private readonly _xpTotals = new Map<number, UserXpTotal>();
 
-  location = {
-    getOrCreateIssueLocation: jest.fn(async () => 1),
-  };
+  location = { getOrCreateIssueLocation: mock(async () => 1) };
 
   xp = {
-    saveRecord: jest.fn(async (input: SaveXpRecordInput) => {
+    saveRecord: mock(async (input: SaveXpRecordInput) => {
       this.calls.push(input);
       const current = this._xpTotals.get(input.userId) ?? { total: 0, permitCount: 0 };
       const nextTotal = current.total + input.numericAmount;
       const permitCount = current.permitCount > 0 ? current.permitCount : 1;
-      this._xpTotals.set(input.userId, {
-        total: nextTotal,
-        permitCount,
-      });
+      this._xpTotals.set(input.userId, { total: nextTotal, permitCount });
     }),
-    getUserTotal: jest.fn(async (userId: number) => this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 }),
+    getUserTotal: mock(async (userId: number) => this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 }),
   };
 
   setUserTotal(userId: number, total: number, permitCount = 1) {
@@ -44,20 +39,11 @@ type CreateUnassignedContextOptions = {
 };
 
 export function createUnassignedContext(options: CreateUnassignedContextOptions) {
-  const defaultConfig = {
-    disableCommentPosting: false,
-    disqualificationBanThreshold: -2000,
-  } as const;
+  const defaultConfig = { disableCommentPosting: false, disqualificationBanThreshold: -2000 } as const;
   if (options.includePriceLabel === false) {
-    db.issue.update({
-      where: { id: { equals: 1 } },
-      data: { labels: [] },
-    });
+    db.issue.update({ where: { id: { equals: 1 } }, data: { labels: [] } });
   } else if (typeof options.priceLabel === "string") {
-    db.issue.update({
-      where: { id: { equals: 1 } },
-      data: { labels: [{ name: options.priceLabel }] },
-    });
+    db.issue.update({ where: { id: { equals: 1 } }, data: { labels: [{ name: options.priceLabel }] } });
   }
   const repoRecord = db.repo.findFirst({ where: { id: { equals: 1 } } });
   const senderRecord = db.users.findFirst({ where: { id: { equals: 1 } } });
@@ -69,18 +55,11 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
   const repo = repoRecord as unknown as ContextPlugin["payload"]["repository"];
   const sender = senderRecord as unknown as ContextPlugin["payload"]["sender"];
   const issue = issueRecord as unknown as ContextPlugin<"issues.unassigned">["payload"]["issue"];
-  const assignee = {
-    ...assigneeRecord,
-    type: "User",
-  } as unknown as ContextPlugin<"issues.unassigned">["payload"]["assignee"];
+  const assignee = { ...assigneeRecord, type: "User" } as unknown as ContextPlugin<"issues.unassigned">["payload"]["assignee"];
   if (typeof options.issueAuthorId === "number") {
     const authorRecord = db.users.findFirst({ where: { id: { equals: options.issueAuthorId } } });
     if (authorRecord) {
-      issue.user = {
-        id: authorRecord.id,
-        login: authorRecord.login,
-        type: "User",
-      } as unknown as NonNullable<typeof issue.user>;
+      issue.user = { id: authorRecord.id, login: authorRecord.login, type: "User" } as unknown as NonNullable<typeof issue.user>;
     }
   }
   const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
@@ -88,11 +67,7 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
     if (options.includeDisqualifierComment) {
       const marker = "<!-- Ubiquity OS - Daemon XP - Step - @ubiquity-os/daemon-disqualifier -->";
       createTimelineEvent(issue.number, {
-        actor: {
-          id: sender.id,
-          login: sender.login,
-          type: "Bot",
-        },
+        actor: { id: sender.id, login: sender.login, type: "Bot" },
         created_at: new Date(Date.now() - 1000).toISOString(),
         eventName: "commented",
         body: `${marker}\nDisqualified due to inactivity.`,
@@ -101,15 +76,8 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
       });
     }
     createTimelineEvent(issue.number, {
-      actor: {
-        id: sender.id,
-        login: sender.login,
-        type: options.timelineActorType ?? "Bot",
-      },
-      assignee: {
-        id: assigneeRecord.id,
-        login: assigneeRecord.login,
-      },
+      actor: { id: sender.id, login: sender.login, type: options.timelineActorType ?? "Bot" },
+      assignee: { id: assigneeRecord.id, login: assigneeRecord.login },
     });
   }
   const context = {
@@ -126,26 +94,18 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
     },
     logger: new Logs("debug"),
     config: { ...defaultConfig, ...(options.config ?? {}) } as PluginSettings,
-    env: {
-      SUPABASE_URL: "https://supabase.test",
-      SUPABASE_KEY: "test-key",
-    } as Env,
+    env: { SUPABASE_URL: "https://supabase.test", SUPABASE_KEY: "test-key" } as Env,
     octokit: options.octokit,
     commentHandler: new CommentHandler(),
-    adapters: {
-      supabase: supabaseAdapter,
-    },
+    adapters: { supabase: supabaseAdapter },
   } as unknown as ContextPlugin<"issues.unassigned">;
-  const infoSpy = jest.spyOn(context.logger, "info");
-  const errorSpy = jest.spyOn(context.logger, "error");
-  const okSpy = jest.spyOn(context.logger, "ok");
-  return {
-    context,
-    infoSpy,
-    errorSpy,
-    okSpy,
-    supabaseAdapter,
-  };
+  spyOn(context.octokit.graphql, "paginate").mockResolvedValue({
+    repository: { issue: { closedByPullRequestsReferences: { edges: [] } } },
+  } as unknown as Record<string, unknown>);
+  const infoSpy = spyOn(context.logger, "info");
+  const errorSpy = spyOn(context.logger, "error");
+  const okSpy = spyOn(context.logger, "ok");
+  return { context, infoSpy, errorSpy, okSpy, supabaseAdapter };
 }
 
 type CreateIssueCommentContextOptions = {
@@ -167,18 +127,11 @@ export function createIssueCommentContext(options: CreateIssueCommentContextOpti
   }
   const repo = repoRecord as unknown as ContextPlugin["payload"]["repository"];
   const issue = issueRecord as unknown as ContextPlugin<"issue_comment.created">["payload"]["issue"];
-  const sender = {
-    ...commenterRecord,
-    type: "User",
-  } as unknown as ContextPlugin["payload"]["sender"];
+  const sender = { ...commenterRecord, type: "User" } as unknown as ContextPlugin["payload"]["sender"];
   const comment = {
     id: options.commentId ?? Date.now(),
     body: options.commentBody ?? "/xp",
-    user: {
-      login: commenterRecord.login,
-      id: commenterRecord.id,
-      type: "User",
-    },
+    user: { login: commenterRecord.login, id: commenterRecord.id, type: "User" },
   } as ContextPlugin<"issue_comment.created">["payload"]["comment"];
   const context = {
     eventName: "issue_comment.created",
@@ -194,18 +147,13 @@ export function createIssueCommentContext(options: CreateIssueCommentContextOpti
     },
     logger: new Logs("debug"),
     config: (options.config ?? {}) as PluginSettings,
-    env: {
-      SUPABASE_URL: "https://supabase.test",
-      SUPABASE_KEY: "test-key",
-    } as Env,
+    env: { SUPABASE_URL: "https://supabase.test", SUPABASE_KEY: "test-key" } as Env,
     octokit: options.octokit,
     commentHandler: new CommentHandler(),
-    adapters: {
-      supabase: supabaseAdapter,
-    },
+    adapters: { supabase: supabaseAdapter },
   } as unknown as ContextPlugin<"issue_comment.created">;
-  return {
-    context,
-    supabaseAdapter,
-  };
+  spyOn(context.octokit.graphql, "paginate").mockResolvedValue({
+    repository: { issue: { closedByPullRequestsReferences: { edges: [] } } },
+  } as unknown as Record<string, unknown>);
+  return { context, supabaseAdapter };
 }

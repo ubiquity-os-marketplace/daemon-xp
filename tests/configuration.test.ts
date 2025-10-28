@@ -1,6 +1,6 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { drop } from "@mswjs/data";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from "bun:test";
 import { runPlugin } from "../src";
 import { resetXpRequestDependencies } from "../src/http/xp/handle-xp-request";
 import { db } from "./__mocks__/db";
@@ -16,8 +16,8 @@ beforeAll(() => {
 
 afterEach(() => {
   server.resetHandlers();
-  jest.clearAllMocks();
-  jest.restoreAllMocks();
+  mock.clearAllMocks();
+  mock.restore();
   resetXpRequestDependencies();
 });
 
