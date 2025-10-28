@@ -34,6 +34,7 @@
     "open-source"
   ],
   "dependencies": {
+    "@octokit/graphql-schema": "^15.26.0",
     "@sinclair/typebox": "0.34.41",
     "@supabase/supabase-js": "^2.74.0",
     "@ubiquity-os/plugin-sdk": "3.3.4",
