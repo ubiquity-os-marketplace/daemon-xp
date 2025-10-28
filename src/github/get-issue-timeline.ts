@@ -18,7 +18,6 @@ export async function getIssueTimeline(context: ContextPlugin<"issues.unassigned
     owner: ownerLogin,
     repo: repositoryName,
     issue_number: issueNumber,
-    mediaType: { previews: ["mockingbird"] },
   });
   return timeline as TimelineResponse;
 }
