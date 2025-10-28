@@ -1,6 +1,5 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
 import { LOG_LEVEL } from "@ubiquity-os/ubiquity-os-logger";
-import "dotenv/config";
 
 /**
  * Define sensitive environment variables here.

@@ -5,7 +5,7 @@ const config: KnipConfig = {
   project: ["src/", "test/"],
   ignore: ["src/types/config.ts", "**/__mocks__/**", "**/__fixtures__/**"],
   ignoreExportsUsedInFile: true,
-  ignoreDependencies: ["ts-node", "supabase", "decimal.js", "ethers", "@octokit/graphql-schema"],
+  ignoreDependencies: ["ts-node", "supabase", "decimal.js", "ethers", "@octokit/graphql-schema", "msw", "@mswjs/data"],
   eslint: true,
 };
 
