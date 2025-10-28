@@ -2,19 +2,19 @@
   "name": "daemon-xp",
   "description": "Handles XP for users.",
   "skipBotEvents": false,
-  "ubiquity:listeners": [
-    "issues.unassigned",
-    "issue_comment.created",
-    "pull_request_review_comment.created",
-    "pull_request_review.submitted"
-  ],
+  "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
   "commands": {
     "xp": {
       "ubiquity:example": "/xp username",
       "description": "Gets the XP for a user. If no user is specified, the user who invoked the command will be used.",
       "parameters": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "The username of the user to get XP for."
+          }
+        }
       }
     }
   },
