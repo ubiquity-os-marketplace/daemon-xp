@@ -80,7 +80,7 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     numericAmount: -malusAmount,
   });
   const currentTotal = await context.adapters.supabase.xp.getUserTotal(assignee.id);
-  const totalAfterMalus = currentTotal.total - malusAmount;
+  const totalAfterMalus = currentTotal.total;
   if (
     await maybeBanAssignee(context, {
       assignee,
