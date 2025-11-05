@@ -21,7 +21,18 @@
   "configuration": {
     "default": {},
     "type": "object",
-    "properties": {}
+    "properties": {
+      "disableCommentPosting": {
+        "description": "Set to true to prevent XP updates from being posted back to GitHub.",
+        "default": false,
+        "type": "boolean"
+      },
+      "disqualificationBanThreshold": {
+        "description": "Ban the user from the organization when their XP falls below this value after a disqualification.",
+        "default": -2000,
+        "type": "number"
+      }
+    }
   },
   "homepage_url": "https://daemon-xp-feat-xp-tracker.deno.dev"
 }
