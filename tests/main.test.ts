@@ -233,7 +233,7 @@ describe("Plugin tests", () => {
     expect(latestComment?.body).toContain("-25 XP");
     expect(latestComment?.body).toContain("collab-one");
     expect(latestComment?.body).toContain("Current XP");
-    expect(latestComment?.body).toContain("100 XP");
+    expect(latestComment?.body).toContain("125 XP");
     expect(permissionRequests).toContain("collab-one");
   });
 
