@@ -1,16 +1,15 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
 
-/**
- * This should contain the properties of the bot config
- * that are required for the plugin to function.
- *
- * The kernel will extract those and pass them to the plugin,
- * which are built into the context object from setup().
- */
 export const pluginSettingsSchema = T.Object(
   {
-    configurableResponse: T.String({ default: "Hello, world!" }),
-    customStringsUrl: T.Optional(T.String()),
+    disableCommentPosting: T.Boolean({
+      description: "Set to true to prevent XP updates from being posted back to GitHub.",
+      default: false,
+    }),
+    disqualificationBanThreshold: T.Number({
+      description: "Ban the user from the organization when their XP falls below this value after a disqualification.",
+      default: -2000,
+    }),
   },
   { default: {} }
 );

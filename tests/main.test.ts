@@ -1,27 +1,33 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { drop } from "@mswjs/data";
-import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { Logs } from "@ubiquity-os/ubiquity-os-logger";
-import dotenv from "dotenv";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
+import { http, HttpResponse } from "msw";
 import manifest from "../manifest.json";
 import { runPlugin } from "../src";
-import { Env } from "../src/types";
-import { Context } from "../src/types/context";
+import { filterCollaborators } from "../src/github/filter-collaborators";
+import { getInvolvedUsers } from "../src/github/get-involved-users";
+import { overrideXpRequestDependencies, resetXpRequestDependencies } from "../src/http/xp/handle-xp-request";
+import { Env } from "../src/types/index";
 import { db } from "./__mocks__/db";
-import { createComment, setupTests } from "./__mocks__/helpers";
+import { setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
-import { STRINGS } from "./__mocks__/strings";
+import { createIssueCommentContext, createUnassignedContext, SupabaseAdapterStub } from "./__mocks__/test-context";
 
-dotenv.config();
 const octokit = new Octokit();
+type FetchUserTotal = typeof import("../src/adapters/supabase/xp/get-user-total").fetchUserTotal;
+
+function typedSpyOn<TTarget extends object, TKey extends keyof TTarget>(target: TTarget, key: TKey) {
+  return spyOn(target as unknown as Record<TKey, (...args: unknown[]) => unknown>, key);
+}
 
 beforeAll(() => {
   server.listen();
 });
 afterEach(() => {
   server.resetHandlers();
-  jest.clearAllMocks();
+  mock.clearAllMocks();
+  mock.restore();
+  resetXpRequestDependencies();
 });
 afterAll(() => server.close());
 
@@ -33,130 +39,365 @@ describe("Plugin tests", () => {
 
   it("Should serve the manifest file", async () => {
     const worker = (await import("../src/worker")).default;
-    const response = await worker.fetch(new Request("http://localhost/manifest.json"), {});
+    const response = await worker.fetch(new Request("http://localhost/manifest.json"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
     const content = await response.json();
     expect(content).toEqual(manifest);
   });
 
-  it("Should handle an issue comment event", async () => {
-    const { context, infoSpy, errorSpy, debugSpy, okSpy, verboseSpy } = createContext();
-
-    expect(context.eventName).toBe("issue_comment.created");
-    expect(context.payload.comment.body).toBe("/Hello");
-
-    await runPlugin(context);
-
-    expect(errorSpy).not.toHaveBeenCalled();
-    expect(debugSpy).toHaveBeenNthCalledWith(1, STRINGS.EXECUTING_HELLO_WORLD, {
-      caller: STRINGS.CALLER_LOGS_ANON,
-      sender: STRINGS.USER_1,
-      repo: STRINGS.TEST_REPO,
-      issueNumber: 1,
-      owner: STRINGS.USER_1,
+  it("Should create a negative XP record when a disqualifier comment precedes the bot unassignment", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 42.5;
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      config: { disableCommentPosting: false, disqualificationBanThreshold: 0 },
+      octokit,
     });
-    expect(infoSpy).toHaveBeenNthCalledWith(1, STRINGS.HELLO_WORLD);
-    expect(okSpy).toHaveBeenNthCalledWith(2, STRINGS.SUCCESSFULLY_CREATED_COMMENT);
-    expect(verboseSpy).toHaveBeenNthCalledWith(1, STRINGS.EXITING_HELLO_WORLD);
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(1);
+    expect(supabase.calls[0]?.numericAmount).toBe(-price);
+    const negativeAssigneeId = context.payload.assignee?.id as number;
+    expect(supabase.calls[0]?.userId).toBe(negativeAssigneeId);
   });
 
-  it("Should respond with `Hello, World!` in response to /Hello", async () => {
-    const { context } = createContext();
+  it("Should not create a negative XP record when the disqualifier marker is missing", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 42.5;
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "Bot", priceLabel: `Price: ${price} USD`, octokit });
+
     await runPlugin(context);
-    const comments = db.issueComments.getAll();
-    expect(comments.length).toBe(2);
-    expect(comments[1].body).toMatch(STRINGS.HELLO_WORLD);
+
+    expect(supabase.calls).toHaveLength(0);
   });
 
-  it("Should respond with `Hello, Code Reviewers` in response to /Hello", async () => {
-    const { context } = createContext(STRINGS.CONFIGURABLE_RESPONSE);
+  it("Should scale the malus by the number of collaborators involved", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 55;
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      config: { disableCommentPosting: false, disqualificationBanThreshold: 100 },
+      octokit,
+    });
+    expect(context.config.disqualificationBanThreshold).toBe(100);
+    const assigneeId = context.payload.assignee?.id as number;
+    supabase.setUserTotal(assigneeId, 200, 2);
+    const originalPaginate = context.octokit.paginate.bind(context.octokit);
+    typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
+      const [method, params] = args as Parameters<typeof context.octokit.paginate>;
+      if (
+        method === context.octokit.rest.issues.listComments &&
+        params &&
+        typeof params === "object" &&
+        "issue_number" in params &&
+        !("pull_number" in params)
+      ) {
+        return [
+          { id: 501, user: { id: 901, login: "collab-one", type: "User" } },
+          { id: 502, user: { id: 902, login: "collab-two", type: "User" } },
+        ];
+      }
+      if (
+        (method === context.octokit.rest.issues.listComments ||
+          method === context.octokit.rest.pulls.listReviews ||
+          method === context.octokit.rest.pulls.listReviewComments) &&
+        params &&
+        typeof params === "object" &&
+        "pull_number" in params
+      ) {
+        return [];
+      }
+      return originalPaginate(method, params);
+    });
+    server.use(
+      http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", ({ params }) => {
+        const { username } = params;
+        if (username === "collab-one" || username === "collab-two") {
+          return HttpResponse.json({ permission: "write" });
+        }
+        return HttpResponse.json({ permission: "read" });
+      })
+    );
     await runPlugin(context);
-    const comments = db.issueComments.getAll();
-    expect(comments.length).toBe(2);
-    expect(comments[1].body).toMatch(STRINGS.CONFIGURABLE_RESPONSE);
+
+    expect(supabase.calls).toHaveLength(1);
+    expect(supabase.calls[0]?.numericAmount).toBe(-(price * 2));
   });
 
-  it("Should not respond to a comment that doesn't contain /Hello", async () => {
-    const { context, errorSpy } = createContext(STRINGS.CONFIGURABLE_RESPONSE, STRINGS.INVALID_COMMAND);
-    await runPlugin(context);
-    const comments = db.issueComments.getAll();
+  it("Should include the issue author when collecting collaborators", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const author = db.users.create({ id: 1001, name: "Issue Author", login: "issue-author" });
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: "Price: 15 USD",
+      octokit,
+      issueAuthorId: author.id,
+      includeDisqualifierComment: true,
+    });
+    const originalPaginate = context.octokit.paginate.bind(context.octokit);
+    typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
+      const [method, params] = args as Parameters<typeof context.octokit.paginate>;
+      if (method === context.octokit.rest.issues.listComments) {
+        return [];
+      }
+      return originalPaginate(method, params);
+    });
+    server.use(
+      http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", ({ params }) => {
+        const { username } = params as { username: string };
+        if (username === author.login) {
+          return HttpResponse.json({ permission: "write" });
+        }
+        return HttpResponse.json({ permission: "read" });
+      })
+    );
+    expect(context.payload.issue.user?.login).toBe(author.login);
+    const involvedUsers = await getInvolvedUsers(context);
+    expect(involvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining([author.login]));
+    const collaborators = await filterCollaborators(context, involvedUsers);
+    expect(collaborators.map((user) => user.login)).toEqual(expect.arrayContaining([author.login]));
+  });
 
-    expect(comments.length).toBe(1);
-    expect(errorSpy).toHaveBeenNthCalledWith(1, STRINGS.INVALID_USE_OF_SLASH_COMMAND, { caller: STRINGS.CALLER_LOGS_ANON, body: STRINGS.INVALID_COMMAND });
+  it("Should post a malus summary comment including collaborator multiplier and current XP", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 25;
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      octokit,
+    });
+    const assigneeId = context.payload.assignee?.id;
+    if (typeof assigneeId !== "number") {
+      throw new Error("Test context missing assignee id");
+    }
+    supabase.setUserTotal(assigneeId, 150, 2);
+    const originalPaginate = context.octokit.paginate.bind(context.octokit);
+    typedSpyOn(context.octokit, "paginate").mockImplementation(async (...args: unknown[]) => {
+      const [method, params] = args as Parameters<typeof context.octokit.paginate>;
+      if (
+        method === context.octokit.rest.issues.listComments &&
+        params &&
+        typeof params === "object" &&
+        "issue_number" in params &&
+        !("pull_number" in params)
+      ) {
+        return [{ id: 503, user: { id: 903, login: "collab-one", type: "User" } }];
+      }
+      if (
+        (method === context.octokit.rest.issues.listComments ||
+          method === context.octokit.rest.pulls.listReviews ||
+          method === context.octokit.rest.pulls.listReviewComments) &&
+        params &&
+        typeof params === "object" &&
+        "pull_number" in params
+      ) {
+        return [];
+      }
+      return originalPaginate(method, params);
+    });
+    server.use(http.get("https://api.github.com/orgs/:org/memberships/:username", () => new HttpResponse(null, { status: 404 })));
+    const permissionRequests: string[] = [];
+    server.use(
+      http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", ({ params }) => {
+        const { username } = params as { username: string };
+        permissionRequests.push(username);
+        if (username === "collab-one") {
+          return HttpResponse.json({ permission: "write" });
+        }
+        return HttpResponse.json({ permission: "read" });
+      })
+    );
+    const singleInvolvedUsers = await getInvolvedUsers(context);
+    expect(singleInvolvedUsers.map((user) => user.login)).toEqual(expect.arrayContaining(["collab-one"]));
+    const singleCollaborators = await filterCollaborators(context, singleInvolvedUsers);
+    expect(singleCollaborators.map((user) => user.login)).toEqual(expect.arrayContaining(["collab-one"]));
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(1);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const latestComment = issueComments[issueComments.length - 1];
+    expect(latestComment?.body).toContain("-25 XP");
+    expect(latestComment?.body).toContain("collab-one");
+    expect(latestComment?.body).toContain("Current XP");
+    expect(latestComment?.body).toContain("125 XP");
+    expect(permissionRequests).toContain("collab-one");
+  });
+
+  it("Should ban the assignee when XP falls below the configured threshold after malus", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const price = 20;
+    const threshold = 25;
+    const { context } = createUnassignedContext({
+      supabaseAdapter: supabase,
+      timelineActorType: "Bot",
+      priceLabel: `Price: ${price} USD`,
+      includeDisqualifierComment: true,
+      config: { disqualificationBanThreshold: threshold },
+      octokit,
+    });
+    const assigneeId = context.payload.assignee?.id as number;
+    supabase.setUserTotal(assigneeId, 30, 2);
+    const orgLogin = context.payload.organization?.login;
+    const assigneeLogin = context.payload.assignee?.login;
+    if (typeof orgLogin !== "string" || typeof assigneeLogin !== "string") {
+      throw new Error("Test context missing organization or assignee login");
+    }
+    const blockRequests: Array<{ org: string; username: string }> = [];
+    server.use(
+      http.put("https://api.github.com/orgs/:org/blocks/:username", ({ params }) => {
+        const { org, username } = params as { org: string; username: string };
+        blockRequests.push({ org, username });
+        return new HttpResponse(null, { status: 204 });
+      })
+    );
+    await runPlugin(context);
+
+    expect(blockRequests).toEqual([{ org: orgLogin, username: assigneeLogin }]);
+  });
+
+  it("Should not create an XP record when the unassignment is not from a bot", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, timelineActorType: "User", octokit });
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(0);
+  });
+
+  it("Should not create an XP record when no matching timeline entry is found", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, includeTimeline: false, octokit });
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(0);
+  });
+
+  it("Should not create an XP record when the issue price label is missing", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const { context } = createUnassignedContext({ supabaseAdapter: supabase, includePriceLabel: false, octokit });
+    await runPlugin(context);
+
+    expect(supabase.calls).toHaveLength(0);
+  });
+
+  it("Should post the sender's XP when the /xp command is used without arguments", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, 42.5, 2);
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp", commenterId, octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("42.5 XP");
+  });
+
+  it("Should post XP for the requested username when provided", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const targetUser = db.users.create({ id: 99, name: "Requested User", login: "requested-user" });
+    supabase.setUserTotal(targetUser.id, 17.25, 3);
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body?.startsWith("> [!NOTE]\n> @requested-user currently has 17.25 XP.")).toBe(true);
+  });
+
+  it("Should reply with no data when the requested user does not exist", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp missing-user", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).not.toHaveBeenCalled();
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body?.startsWith("> [!NOTE]\n> I don't have XP data for @missing-user yet.")).toBe(true);
+  });
+
+  it("Should return XP data from the /xp endpoint", async () => {
+    const fetchUserTotalMock = mock<FetchUserTotal>(async (...args: Parameters<FetchUserTotal>) => {
+      const [, , userId] = args;
+      if (userId === 1) {
+        return { total: 12.5, permitCount: 3 };
+      }
+      return { total: 0, permitCount: 0 };
+    });
+    overrideXpRequestDependencies({ getUserTotal: fetchUserTotalMock });
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp?user=user1"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({ users: [{ login: "user1", id: 1, hasData: true, total: 12.5, permitCount: 3 }] });
+    expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
+  });
+
+  it("Should return unavailable entries for usernames without XP data", async () => {
+    db.users.create({ id: 3, name: "user3", login: "user3" });
+    const fetchUserTotalMock = mock<FetchUserTotal>(async (...args: Parameters<FetchUserTotal>) => {
+      const [, , userId] = args;
+      if (userId === 3) {
+        return { total: 0, permitCount: 0 };
+      }
+      return { total: 4, permitCount: 1 };
+    });
+    overrideXpRequestDependencies({ getUserTotal: fetchUserTotalMock });
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp?user=user3&user=missing-user"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({
+      users: [
+        { login: "user3", hasData: false, message: "I don't have XP data for @user3 yet." },
+        { login: "missing-user", hasData: false, message: "I don't have XP data for @missing-user yet." },
+      ],
+    });
+    expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 3);
+  });
+
+  it("Should reject /xp requests without usernames", async () => {
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp"), { SUPABASE_URL: "https://supabase.test", SUPABASE_KEY: "test-key" } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(400);
+    expect(payload).toEqual({
+      error: { code: "missing_usernames", message: "At least one username is required. Provide it using the 'user' query parameter." },
+    });
   });
 });
-
-/**
- * The heart of each test. This function creates a context object with the necessary data for the plugin to run.
- *
- * So long as everything is defined correctly in the db (see `./__mocks__/helpers.ts: setupTests()`),
- * this function should be able to handle any event type and the conditions that come with it.
- *
- * Refactor according to your needs.
- */
-function createContext(
-  configurableResponse: string = "Hello, world!", // we pass the plugin configurable items here
-  commentBody: string = "/Hello",
-  repoId: number = 1,
-  payloadSenderId: number = 1,
-  commentId: number = 1,
-  issueOne: number = 1
-) {
-  const repo = db.repo.findFirst({ where: { id: { equals: repoId } } }) as unknown as Context["payload"]["repository"];
-  const sender = db.users.findFirst({ where: { id: { equals: payloadSenderId } } }) as unknown as Context["payload"]["sender"];
-  const issue1 = db.issue.findFirst({ where: { id: { equals: issueOne } } }) as unknown as Context<"issue_comment.created">["payload"]["issue"];
-
-  createComment(commentBody, commentId); // create it first then pull it from the DB and feed it to _createContext
-  const comment = db.issueComments.findFirst({ where: { id: { equals: commentId } } }) as unknown as Context["payload"]["comment"];
-
-  const context = createContextInner(repo, sender, issue1, comment, configurableResponse);
-  const infoSpy = jest.spyOn(context.logger, "info");
-  const errorSpy = jest.spyOn(context.logger, "error");
-  const debugSpy = jest.spyOn(context.logger, "debug");
-  const okSpy = jest.spyOn(context.logger, "ok");
-  const verboseSpy = jest.spyOn(context.logger, "verbose");
-
-  return {
-    context,
-    infoSpy,
-    errorSpy,
-    debugSpy,
-    okSpy,
-    verboseSpy,
-    repo,
-    issue1,
-  };
-}
-
-/**
- * Creates the context object central to the plugin.
- *
- * This should represent the active `SupportedEvents` payload for any given event.
- */
-function createContextInner(
-  repo: Context["payload"]["repository"],
-  sender: Context["payload"]["sender"],
-  issue: Context<"issue_comment.created">["payload"]["issue"],
-  comment: Context["payload"]["comment"],
-  configurableResponse: string
-) {
-  return {
-    eventName: "issue_comment.created",
-    command: null,
-    payload: {
-      action: "created",
-      sender: sender,
-      repository: repo,
-      issue: issue,
-      comment: comment,
-      installation: { id: 1 } as Context["payload"]["installation"],
-      organization: { login: STRINGS.USER_1 } as Context["payload"]["organization"],
-    },
-    logger: new Logs("debug"),
-    config: {
-      configurableResponse,
-    },
-    env: {} as Env,
-    octokit: octokit,
-    commentHandler: new CommentHandler(),
-  } as unknown as Context;
-}

@@ -19,10 +19,21 @@ export const handlers = [
       db.issue.findFirst({ where: { owner: { equals: owner as string }, repo: { equals: repo as string }, number: { equals: Number(issueNumber) } } })
     )
   ),
-  // get user
-  http.get("https://api.github.com/users/:username", ({ params: { username } }) =>
-    HttpResponse.json(db.users.findFirst({ where: { login: { equals: username as string } } }))
+  http.get("https://api.github.com/repos/:owner/:repo/issues/:issue_number/comments", ({ params: { issue_number: issueNumber } }) =>
+    HttpResponse.json(db.issueComments.findMany({ where: { issue_number: { equals: Number(issueNumber) } } }) ?? [])
   ),
+  http.get("https://api.github.com/repos/:owner/:repo/issues/:issue_number/timeline", ({ params: { issue_number: issueNumber } }) =>
+    HttpResponse.json(db.issueTimelineEvent.findMany({ where: { issue_number: { equals: Number(issueNumber) } } }) ?? [])
+  ),
+  http.get("https://api.github.com/repos/:owner/:repo/pulls/:pull_number/reviews", () => HttpResponse.json([])),
+  // get user
+  http.get("https://api.github.com/users/:username", ({ params: { username } }) => {
+    const user = db.users.findFirst({ where: { login: { equals: username as string } } });
+    if (!user) {
+      return new HttpResponse(null, { status: 404 });
+    }
+    return HttpResponse.json(user);
+  }),
   // get repo
   http.get("https://api.github.com/repos/:owner/:repo", ({ params: { owner, repo } }: { params: { owner: string; repo: string } }) => {
     const item = db.repo.findFirst({ where: { name: { equals: repo }, owner: { login: { equals: owner } } } });
@@ -54,6 +65,9 @@ export const handlers = [
     db.issueComments.update({ where: { id: { equals: id } }, data: newItem });
     return HttpResponse.json(newItem);
   }),
+  http.get("https://api.github.com/orgs/:org/memberships/:username", () => new HttpResponse(null, { status: 404 })),
+  http.get("https://api.github.com/repos/:owner/:repo/collaborators/:username/permission", () => HttpResponse.json({ permission: "read" })),
+  http.put("https://api.github.com/orgs/:org/blocks/:username", () => new HttpResponse(null, { status: 204 })),
 ];
 
 async function getValue(body: ReadableStream<Uint8Array> | null) {

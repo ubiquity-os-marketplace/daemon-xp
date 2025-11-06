@@ -81,4 +81,15 @@ export const db = factory({
       id: Number,
     },
   },
+  issueTimelineEvent: {
+    id: primaryKey(Number),
+    issue_number: Number,
+    event: String,
+    created_at: String,
+    actor: nullable(Object),
+    assignee: nullable(Object),
+    body: nullable(String),
+    body_html: nullable(String),
+    body_text: nullable(String),
+  },
 });

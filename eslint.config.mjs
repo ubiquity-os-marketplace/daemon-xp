@@ -5,7 +5,7 @@ import sonarjs from "eslint-plugin-sonarjs";
 import checkFile from "eslint-plugin-check-file";
 
 export default tsEslint.config([
-  { ignores: [".github/knip.ts", "dist/", ".wrangler/**", "coverage/**"] },
+  { ignores: [".github/knip.ts", "dist/", ".wrangler/**", "coverage/**", "src/adapters/supabase/generated-types.ts"] },
   {
     plugins: {
       "@typescript-eslint": tsEslint.plugin,

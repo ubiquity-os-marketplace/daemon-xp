@@ -1,14 +1,27 @@
-import { Context } from "./context";
+import { ContextPlugin } from "./context";
 
-/**
- * Typeguards are most helpful when you have a union type, and you want to narrow it down to a specific one.
- * In other words, if `SupportedEvents` has multiple types then these restrict the scope
- * of `context` to a specific event payload.
- */
+export function isIssueUnassignedEvent(context: ContextPlugin): context is ContextPlugin<"issues.unassigned"> {
+  return context.eventName === "issues.unassigned";
+}
 
-/**
- * Restricts the scope of `context` to the `issue_comment.created` payload.
- */
-export function isCommentEvent(context: Context): context is Context {
-  return context.eventName === "issue_comment.created" || context.eventName === "pull_request_review_comment.created";
+export function isIssueCommentCreatedEvent(context: ContextPlugin): context is ContextPlugin<"issue_comment.created"> {
+  return context.eventName === "issue_comment.created";
+}
+
+export function isPullRequestReviewCommentCreatedEvent(context: ContextPlugin): context is ContextPlugin<"pull_request_review_comment.created"> {
+  return context.eventName === "pull_request_review_comment.created";
+}
+
+export function isPullRequestReviewSubmittedEvent(context: ContextPlugin): context is ContextPlugin<"pull_request_review.submitted"> {
+  return context.eventName === "pull_request_review.submitted";
+}
+
+export function isXpCommandEvent(
+  context: ContextPlugin
+): context is ContextPlugin<"issue_comment.created"> | ContextPlugin<"pull_request_review_comment.created"> | ContextPlugin<"pull_request_review.submitted"> {
+  return (
+    context.eventName === "issue_comment.created" ||
+    context.eventName === "pull_request_review_comment.created" ||
+    context.eventName === "pull_request_review.submitted"
+  );
 }

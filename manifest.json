@@ -1,23 +1,27 @@
 {
-  "name": "ts-template",
-  "description": "ts-template for UbiquityOS plugins.",
+  "name": "daemon-xp",
+  "description": "Handles XP for users.",
+  "skipBotEvents": false,
+  "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
   "commands": {
-    "hello": {
-      "ubiquity:example": "/hello argument",
-      "description": "Hello command with an argument."
+    "xp": {
+      "ubiquity:example": "/xp username",
+      "description": "Gets the XP for a user. If no user is specified, the user who invoked the command will be used.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "The username of the user to get XP for."
+          }
+        }
+      }
     }
   },
   "configuration": {
     "default": {},
     "type": "object",
-    "properties": {
-      "configurableResponse": {
-        "default": "Hello, world!",
-        "type": "string"
-      },
-      "customStringsUrl": {
-        "type": "string"
-      }
-    }
-  }
+    "properties": {}
+  },
+  "homepage_url": "https://daemon-xp-feat-xp-tracker.deno.dev"
 }
