@@ -27,9 +27,12 @@ export default {
       }
     );
 
-    plugin.get("/xp", (ctx) => {
+    plugin.all("/xp", (ctx) => {
       let validatedEnv: Env;
 
+      if (ctx.req.method !== "GET" && ctx.req.method !== "POST") {
+        return new Response(`${ctx.req.method} is not allowed.`, { status: 405 });
+      }
       try {
         const runtimeEnv = honoEnv(ctx as unknown as Parameters<typeof honoEnv>[0]);
         validatedEnv = Value.Decode(envSchema, Value.Default(envSchema, runtimeEnv));
