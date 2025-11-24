@@ -5,13 +5,14 @@ import { Database } from "./adapters/supabase/generated-types";
 import { handleCommand } from "./handlers/command-handler";
 import { handleIssueUnassigned } from "./handlers/handle-issue-unassigned";
 import { handleXpCommand } from "./handlers/handle-xp-command";
+import { Command } from "./types/command";
 import { ContextPlugin, Env, PluginSettings, SupportedEvents } from "./types/index";
 import { isIssueUnassignedEvent, isXpCommandEvent } from "./types/typeguards";
 
 /**
  * The main plugin function. Split for easier testing.
  */
-export async function runPlugin(context: Context<PluginSettings, Env, ContextPlugin, SupportedEvents>) {
+export async function runPlugin(context: Context<PluginSettings, Env, Command, SupportedEvents>) {
   const { logger, eventName } = context;
   const augmentedContext = context as ContextPlugin;
 

@@ -7,11 +7,12 @@ import { env as honoEnv } from "hono/adapter";
 import manifest from "../manifest.json";
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
+import { Command } from "./types/command";
 import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types/index";
 
 export default {
   async fetch(request: Request, env: Env, executionCtx?: ExecutionContext) {
-    const plugin = createPlugin<PluginSettings, Env, null, SupportedEvents>(
+    const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
       },
