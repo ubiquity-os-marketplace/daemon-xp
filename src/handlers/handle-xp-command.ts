@@ -29,7 +29,7 @@ export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   let parsed = parseCommand(commentBody);
   // If the reason of invocation is a command from an LLM, use the sender's identity
   if (context.command) {
-    parsed = { username: context.payload.sender.login };
+    parsed = { username: context.command.parameters.username ?? context.payload.sender.login };
   } else if (!parsed) {
     context.logger.warn("Invalid XP command format.", { commentBody });
     return;
