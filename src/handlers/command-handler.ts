@@ -1,4 +1,4 @@
-import { ContextPlugin } from "../types";
+import { ContextPlugin } from "../types/index";
 import { isIssueCommentCreatedEvent } from "../types/typeguards";
 import { handleXpCommand } from "./handle-xp-command";
 
