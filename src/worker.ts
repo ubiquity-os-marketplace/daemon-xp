@@ -3,7 +3,7 @@ import { createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
-import { env as honoEnv } from "hono/adapter";
+import { env, env as honoEnv } from "hono/adapter";
 import manifest from "../manifest.json";
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
@@ -11,7 +11,8 @@ import { Command } from "./types/command";
 import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types/index";
 
 export default {
-  async fetch(request: Request, env: Env, executionCtx?: ExecutionContext) {
+  async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
+    const parsedEnv = env<Env>(request as never);
     const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
@@ -21,18 +22,15 @@ export default {
         envSchema: envSchema,
         postCommentOnError: true,
         settingsSchema: pluginSettingsSchema,
-        logLevel: (env.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-        kernelPublicKey: env.KERNEL_PUBLIC_KEY,
+        logLevel: (parsedEnv.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
+        kernelPublicKey: parsedEnv.KERNEL_PUBLIC_KEY,
         bypassSignatureVerification: process.env.NODE_ENV === "local",
       }
     );
 
-    plugin.all("/xp", (ctx) => {
+    plugin.get("/xp", (ctx) => {
       let validatedEnv: Env;
 
-      if (ctx.req.method !== "GET" && ctx.req.method !== "POST") {
-        return new Response(`${ctx.req.method} is not allowed.`, { status: 405 });
-      }
       try {
         const runtimeEnv = honoEnv(ctx as unknown as Parameters<typeof honoEnv>[0]);
         validatedEnv = Value.Decode(envSchema, Value.Default(envSchema, runtimeEnv));
@@ -51,6 +49,6 @@ export default {
       return handleXpRequest(ctx.req.raw, validatedEnv);
     });
 
-    return plugin.fetch(request, env, executionCtx);
+    return plugin.fetch(request, environment, executionCtx);
   },
 };
