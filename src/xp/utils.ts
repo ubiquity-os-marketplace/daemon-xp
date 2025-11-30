@@ -3,8 +3,7 @@ import { UserXpTotal } from "../types/supabase";
 
 export function sanitizeHandle(raw: string): string | undefined {
   const trimmed = raw.trim();
-  const withoutWrappers = trimmed.replace(/^[[(<{]+/, "").replace(/[\])}>]+$/, "");
-  const normalized = withoutWrappers.replace(/^@+/, "");
+  const normalized = trimmed.replace(/^@+/, "");
   if (normalized.length === 0) {
     return undefined;
   }
