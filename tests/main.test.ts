@@ -313,7 +313,7 @@ describe("Plugin tests", () => {
     const supabase = new SupabaseAdapterStub();
     const targetUser = db.users.create({ id: 99, name: "Requested User", login: "requested-user" });
     supabase.setUserTotal(targetUser.id, 17.25, 3);
-    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user", octokit });
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp @requested-user", octokit });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
@@ -323,6 +323,22 @@ describe("Plugin tests", () => {
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body?.startsWith("> [!NOTE]\n> @requested-user currently has 17.25 XP.")).toBe(true);
+  });
+
+  it("Should handle bracketed usernames copied from the help menu", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const targetUser = db.users.create({ id: 199, name: "Bracketed User", login: "bracketed-user" });
+    supabase.setUserTotal(targetUser.id, 10, 1);
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp [@bracketed-user]", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id);
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body?.startsWith("> [!NOTE]\n> @bracketed-user currently has 10 XP.")).toBe(true);
   });
 
   it("Should reply with no data when the requested user does not exist", async () => {

@@ -2,7 +2,9 @@ import Decimal from "decimal.js";
 import { UserXpTotal } from "../types/supabase";
 
 export function sanitizeHandle(raw: string): string | undefined {
-  const normalized = raw.trim().replace(/^@+/, "");
+  const trimmed = raw.trim();
+  const withoutWrappers = trimmed.replace(/^[[(<{]+/, "").replace(/[\])}>]+$/, "");
+  const normalized = withoutWrappers.replace(/^@+/, "");
   if (normalized.length === 0) {
     return undefined;
   }
