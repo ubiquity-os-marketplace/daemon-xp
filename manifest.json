@@ -5,7 +5,7 @@
   "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
   "commands": {
     "xp": {
-      "ubiquity:example": "/xp username",
+      "ubiquity:example": "/xp @username",
       "description": "Gets the XP for a user. If no user is specified, the user who invoked the command will be used.",
       "parameters": {
         "type": "object",
@@ -23,5 +23,5 @@
     "type": "object",
     "properties": {}
   },
-  "homepage_url": "https://daemon-xp-development.deno.dev"
+  "homepage_url": "https://daemon-xp-issue-4-referenc.deno.dev"
 }

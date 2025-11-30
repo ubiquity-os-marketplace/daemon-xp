@@ -313,7 +313,7 @@ describe("Plugin tests", () => {
     const supabase = new SupabaseAdapterStub();
     const targetUser = db.users.create({ id: 99, name: "Requested User", login: "requested-user" });
     supabase.setUserTotal(targetUser.id, 17.25, 3);
-    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp requested-user", octokit });
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp @requested-user", octokit });
     const commentCountBefore = db.issueComments.count();
 
     await runPlugin(context);
