@@ -53,7 +53,7 @@ export async function handleXpCommand(context: ContextPlugin): Promise<void> {
     return;
   }
   const formattedXp = formatXp(total.total);
-  await context.commentHandler.postComment(context, context.logger.info(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
+  await context.commentHandler.postComment(context, context.logger.ok(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
 }
 
 function getCommentBody(context: ContextPlugin): string | null {
