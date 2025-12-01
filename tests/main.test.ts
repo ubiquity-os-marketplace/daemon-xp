@@ -322,7 +322,7 @@ describe("Plugin tests", () => {
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body?.startsWith("> [!NOTE]\n> @requested-user currently has 17.25 XP.")).toBe(true);
+    expect(newComment?.body?.startsWith("> [!TIP]\n> @requested-user currently has 17.25 XP.")).toBe(true);
   });
 
   it("Should reply with no data when the requested user does not exist", async () => {
