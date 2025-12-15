@@ -23,10 +23,15 @@ type TargetUser = {
 export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   const commentBody = getCommentBody(context);
   if (!commentBody) {
+    context.logger.warn("No comment body found for XP command event.");
     return;
   }
-  const parsed = parseCommand(commentBody);
-  if (!parsed) {
+  let parsed = parseCommand(commentBody);
+  // If the reason of invocation is a command from an LLM, use the sender's identity
+  if (context.command) {
+    parsed = { username: context.command.parameters.username ?? context.payload.sender.login };
+  } else if (!parsed) {
+    context.logger.warn("Invalid XP command format.", { commentBody });
     return;
   }
   const sender = getSender(context);
@@ -48,7 +53,7 @@ export async function handleXpCommand(context: ContextPlugin): Promise<void> {
     return;
   }
   const formattedXp = formatXp(total.total);
-  await context.commentHandler.postComment(context, context.logger.info(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
+  await context.commentHandler.postComment(context, context.logger.ok(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
 }
 
 function getCommentBody(context: ContextPlugin): string | null {

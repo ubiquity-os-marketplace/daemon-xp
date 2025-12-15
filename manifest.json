@@ -3,9 +3,10 @@
   "description": "Handles XP for users.",
   "skipBotEvents": false,
   "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
+  "workflowId": "dispatch.yml",
   "commands": {
     "xp": {
-      "ubiquity:example": "/xp username",
+      "ubiquity:example": "/xp @username",
       "description": "Gets the XP for a user. If no user is specified, the user who invoked the command will be used.",
       "parameters": {
         "type": "object",
@@ -21,7 +22,19 @@
   "configuration": {
     "default": {},
     "type": "object",
-    "properties": {}
+    "properties": {
+      "disableCommentPosting": {
+        "description": "Set to true to prevent XP updates from being posted back to GitHub.",
+        "default": false,
+        "type": "boolean"
+      },
+      "disqualificationBanThreshold": {
+        "description": "Ban the user from the organization when their XP falls below this value after a disqualification.",
+        "default": -2000,
+        "type": "number"
+      }
+    }
   },
-  "homepage_url": "https://daemon-xp-main.deno.dev"
+  "homepage_url": "https://daemon-xp-fix-action-entry.deno.dev",
+  "short_name": "ubiquity-os-marketplace/daemon-xp@development"
 }

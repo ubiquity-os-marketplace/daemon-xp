@@ -3,15 +3,17 @@ import { createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
-import { env as honoEnv } from "hono/adapter";
+import { env, env as honoEnv } from "hono/adapter";
 import manifest from "../manifest.json";
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
+import { Command } from "./types/command";
 import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types/index";
 
 export default {
-  async fetch(request: Request, env: Env, executionCtx?: ExecutionContext) {
-    const plugin = createPlugin<PluginSettings, Env, null, SupportedEvents>(
+  async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
+    const parsedEnv = env<Env>(request as never);
+    const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
       },
@@ -20,8 +22,8 @@ export default {
         envSchema: envSchema,
         postCommentOnError: true,
         settingsSchema: pluginSettingsSchema,
-        logLevel: (env.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-        kernelPublicKey: env.KERNEL_PUBLIC_KEY,
+        logLevel: (parsedEnv.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
+        kernelPublicKey: parsedEnv.KERNEL_PUBLIC_KEY,
         bypassSignatureVerification: process.env.NODE_ENV === "local",
       }
     );
@@ -47,6 +49,6 @@ export default {
       return handleXpRequest(ctx.req.raw, validatedEnv);
     });
 
-    return plugin.fetch(request, env, executionCtx);
+    return plugin.fetch(request, environment, executionCtx);
   },
 };
