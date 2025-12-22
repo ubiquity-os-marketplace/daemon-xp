@@ -34,6 +34,6 @@
       }
     }
   },
-  "homepage_url": "https://daemon-xp-development.deno.dev",
-  "short_name": "ubiquity-os-marketplace/daemon-xp@codex/concurrent-20251222"
+  "homepage_url": "https://daemon-xp-codex-concurrent.deno.dev",
+  "short_name": "ubiquity-os-marketplace/daemon-xp@development"
 }
