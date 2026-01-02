@@ -6,10 +6,10 @@ import { Database } from "../generated-types";
 
 export const BASE_UNIT = new Decimal(10).pow(18);
 
-type Logger = Pick<Logs, "info" | "debug" | "error">;
+type Logger = Pick<Logs, "info" | "debug" | "ok" | "error">;
 
 export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number): Promise<UserXpTotal> {
-  logger.debug(`Fetching XP permits for userId: ${userId}`);
+  logger.info(`Fetching XP permits for userId: ${userId}`);
   const pageSize = 1000;
   let from = 0;
   let permitCount = 0;
@@ -38,14 +38,14 @@ export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Data
     from += pageSize;
   }
   if (permitCount === 0) {
-    logger.info(`No XP permits found for userId: ${userId}`);
+    logger.debug(`No XP permits found for userId: ${userId}`);
     return {
       total: 0,
       permitCount: 0,
     };
   }
   const normalized = total.div(BASE_UNIT);
-  logger.debug(`XP permits fetched successfully for userId: ${userId}`);
+  logger.ok(`XP permits fetched successfully for userId: ${userId}`);
   return {
     total: normalized.toNumber(),
     permitCount,
