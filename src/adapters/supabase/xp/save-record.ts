@@ -10,7 +10,7 @@ import { BASE_UNIT } from "./get-user-total";
 
 export async function saveXpRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: SaveXpRecordInput): Promise<void> {
   const { userId, issue, numericAmount } = input;
-  context.logger.debug(`Attempting to save XP for userId: ${userId}, issueId: ${issue.issueId}, amount: ${numericAmount}`);
+  context.logger.info(`Attempting to save XP for userId: ${userId}, issueId: ${issue.issueId}, amount: ${numericAmount}`);
   const userLookup = await client.from("users").select("id").eq("id", userId).maybeSingle();
   let beneficiaryId: number;
   if (userLookup.error) {
@@ -22,7 +22,7 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
     if (userInsert.error || !userInsert.data) {
       throw context.logger.error("Failed to create user in database", { userInsertError: userInsert.error });
     }
-    context.logger.info(`Successfully created user with ID ${userId} in database.`);
+    context.logger.ok(`Successfully created user with ID ${userId} in database.`);
     beneficiaryId = userInsert.data.id;
   } else {
     beneficiaryId = userLookup.data.id;
@@ -45,7 +45,7 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
     if (permitUpdate.error) {
       throw context.logger.error("Failed to update XP record in database", { permitUpdateError: permitUpdate.error });
     }
-    context.logger.info(`XP record updated successfully for userId: ${userId}, issueId: ${issue.issueId}`);
+    context.logger.ok(`XP record updated successfully for userId: ${userId}, issueId: ${issue.issueId}`);
     return;
   }
   const nonce = BigInt(keccak256(toUtf8Bytes(`${userId}-${issue.issueId}`))).toString();
@@ -62,5 +62,5 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
   if (permitInsert.error) {
     throw context.logger.error("Failed to insert XP record into database", { permitInsertError: permitInsert.error });
   }
-  context.logger.info(`XP record inserted successfully for userId: ${userId}, issueId: ${issue.issueId}`);
+  context.logger.ok(`XP record inserted successfully for userId: ${userId}, issueId: ${issue.issueId}`);
 }

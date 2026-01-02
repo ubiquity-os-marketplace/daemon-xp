@@ -10,39 +10,39 @@ import { formatXp, sanitizeHandle } from "../xp/utils";
 export async function handleIssueUnassigned(context: ContextPlugin<"issues.unassigned">): Promise<void> {
   const assignee = context.payload.assignee;
   if (!assignee) {
-    context.logger.info("No assignee provided for unassigned event. Skipping XP processing.");
+    context.logger.debug("No assignee provided for unassigned event. Skipping XP processing.");
     return;
   }
   const timeline = await getIssueTimeline(context);
   const timelineEvent = findLatestUnassignmentEvent(timeline, assignee.id);
   if (!timelineEvent) {
-    context.logger.info(`No unassignment timeline events found for userId ${assignee.id}.`);
+    context.logger.debug(`No unassignment timeline events found for userId ${assignee.id}.`);
     return;
   }
   const actor = "actor" in timelineEvent ? timelineEvent.actor : undefined;
   if (!isActorLike(actor) || !isBotActor(actor)) {
-    context.logger.info("Unassignment was not performed by a bot. Skipping XP deduction.");
+    context.logger.debug("Unassignment was not performed by a bot. Skipping XP deduction.");
     return;
   }
   const unassignmentDate = extractCreatedAt(timelineEvent);
   if (!unassignmentDate) {
-    context.logger.info("Unassignment event did not contain a valid timestamp. Skipping XP deduction.");
+    context.logger.debug("Unassignment event did not contain a valid timestamp. Skipping XP deduction.");
     return;
   }
   const disqualifierComment = findLatestDisqualifierComment(timeline, unassignmentDate);
   if (!disqualifierComment) {
-    context.logger.info("No disqualification marker found near unassignment. Skipping XP deduction.");
+    context.logger.debug("No disqualification marker found near unassignment. Skipping XP deduction.");
     return;
   }
   const issueId = Number(context.payload.issue.id ?? context.payload.issue.number);
   if (!Number.isFinite(issueId)) {
-    throw context.logger.error("Issue ID missing from payload. Cannot persist XP entry.", {
+    throw context.logger.warn("Issue ID missing from payload. Cannot persist XP entry.", {
       issueId,
     });
   }
   const issueUrl = context.payload.issue.html_url || context.payload.issue.url;
   if (!issueUrl) {
-    throw context.logger.error("Issue URL missing from payload. Cannot persist XP entry.");
+    throw context.logger.warn("Issue URL missing from payload. Cannot persist XP entry.");
   }
   const labelNames = (context.payload.issue.labels ?? []).reduce<string[]>((names, label) => {
     if (typeof label === "string") {
@@ -56,17 +56,17 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
   }, []);
   const priceLabel = labelNames.find((name) => name.startsWith("Price:"));
   if (!priceLabel) {
-    context.logger.info("No price label found on issue. Skipping XP deduction.");
+    context.logger.debug("No price label found on issue. Skipping XP deduction.");
     return;
   }
   const match = /Price:\s*(\d+(?:\.\d+)?)/i.exec(priceLabel);
   if (!match) {
-    context.logger.info("Price label did not contain a numeric value. Skipping XP deduction.");
+    context.logger.debug("Price label did not contain a numeric value. Skipping XP deduction.");
     return;
   }
   const xpAmount = Number.parseFloat(match[1]);
   if (!Number.isFinite(xpAmount)) {
-    context.logger.info("Parsed price is not a finite number. Skipping XP deduction.");
+    context.logger.debug("Parsed price is not a finite number. Skipping XP deduction.");
     return;
   }
   const { multiplier, collaborators } = await resolveCollaboratorMultiplier(context);
@@ -91,7 +91,7 @@ export async function handleIssueUnassigned(context: ContextPlugin<"issues.unass
     return;
   }
   if (context.config?.disableCommentPosting) {
-    context.logger.info("Comment posting disabled via configuration.");
+    context.logger.debug("Comment posting disabled via configuration.");
     return;
   }
   await postMalusComment(context, {
@@ -112,7 +112,7 @@ type CollaboratorMultiplierResult = {
 async function resolveCollaboratorMultiplier(context: ContextPlugin<"issues.unassigned">): Promise<CollaboratorMultiplierResult> {
   const users = await getInvolvedUsers(context);
   if (users.length === 0) {
-    context.logger.info("No involved users detected for disqualification event.");
+    context.logger.debug("No involved users detected for disqualification event.");
     return {
       multiplier: 1,
       collaborators: [],
@@ -121,7 +121,7 @@ async function resolveCollaboratorMultiplier(context: ContextPlugin<"issues.unas
   const collaborators = await filterCollaborators(context, users);
   const count = collaborators.length;
   if (count === 0) {
-    context.logger.info("No collaborators among involved users. Applying base malus only.");
+    context.logger.debug("No collaborators among involved users. Applying base malus only.");
     return {
       multiplier: 1,
       collaborators,
@@ -153,12 +153,12 @@ async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, det
   const assigneeLogin = details.assignee.login;
 
   if (details.totalAfterMalus >= threshold) {
-    context.logger.info(`XP total (${details.totalAfterMalus}) is above threshold (${threshold}). Skipping ban for ${assigneeLogin}.`);
+    context.logger.debug(`XP total (${details.totalAfterMalus}) is above threshold (${threshold}). Skipping ban for ${assigneeLogin}.`);
     return false;
   }
   const orgLogin = context.payload.organization?.login;
   if (typeof orgLogin !== "string" || orgLogin.trim().length === 0) {
-    throw context.logger.error("Organization login missing from payload. Cannot ban user.");
+    throw context.logger.warn("Organization login missing from payload. Cannot ban user.");
   }
   const banMessage = context.logger.warn(
     `XP total fell below threshold (${details.totalAfterMalus} < ${threshold}). Banning \`${assigneeLogin}\` from \`${orgLogin}\`.`
@@ -171,7 +171,7 @@ async function maybeBanAssignee(context: ContextPlugin<"issues.unassigned">, det
       org: orgLogin,
       username: assigneeLogin,
     });
-    context.logger.info(`Successfully banned ${assigneeLogin} from ${orgLogin}.`);
+    context.logger.ok(`Successfully banned ${assigneeLogin} from ${orgLogin}.`);
     return true;
   } catch (err) {
     throw context.logger.error(`Failed to ban ${assigneeLogin} from ${orgLogin}.`, { err });
@@ -200,7 +200,7 @@ async function postMalusComment(context: ContextPlugin<"issues.unassigned">, det
     `| Current XP | ${totalValue} |`,
   ];
   const body = lines.join("\n");
-  await context.commentHandler.postComment(context, context.logger.info(body));
+  await context.commentHandler.postComment(context, context.logger.ok(body));
 }
 
 function isActorLike(actor: unknown): actor is { login?: string | null; type?: string | null } {
