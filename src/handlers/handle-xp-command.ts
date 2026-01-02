@@ -23,7 +23,7 @@ type TargetUser = {
 export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   const commentBody = getCommentBody(context);
   if (!commentBody) {
-    context.logger.warn("No comment body found for XP command event.");
+    context.logger.debug("No comment body found for XP command event.");
     return;
   }
   let parsed = parseCommand(commentBody);
@@ -31,25 +31,25 @@ export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   if (context.command) {
     parsed = { username: context.command.parameters.username ?? context.payload.sender.login };
   } else if (!parsed) {
-    context.logger.warn("Invalid XP command format.", { commentBody });
+    context.logger.debug("Invalid XP command format.", { commentBody });
     return;
   }
   const sender = getSender(context);
   if (!sender || !sender.login || typeof sender.id !== "number") {
-    throw context.logger.error("Sender information missing for XP command event.");
+    throw context.logger.warn("Sender information missing for XP command event.");
   }
   if (isBotActor({ login: sender.login, type: sender.type })) {
-    context.logger.info("Ignoring XP command from bot sender.");
+    context.logger.debug("Ignoring XP command from bot sender.");
     return;
   }
   const target = await resolveTargetUser(context, sender, parsed);
   if (!target) {
-    await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
+    await context.commentHandler.postComment(context, context.logger.warn(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
     return;
   }
   const total = await context.adapters.supabase.xp.getUserTotal(target.id);
   if (shouldReturnNoData(total)) {
-    await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(target.login)} yet.`));
+    await context.commentHandler.postComment(context, context.logger.warn(`I don't have XP data for ${formatHandle(target.login)} yet.`));
     return;
   }
   const formattedXp = formatXp(total.total);
@@ -107,7 +107,7 @@ async function resolveTargetUser(context: ContextPlugin, sender: Sender, parsed:
     };
   } catch (err) {
     if (isNotFoundError(err)) {
-      context.logger.info(`User ${parsed.username} not found on GitHub.`);
+      context.logger.warn(`User ${parsed.username} not found on GitHub.`);
       return undefined;
     }
     throw context.logger.error(`Failed to fetch user information from GitHub for ${parsed.username}`, {
