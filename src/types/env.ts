@@ -11,6 +11,7 @@ import { LOG_LEVEL } from "@ubiquity-os/ubiquity-os-logger";
 export const envSchema = T.Object({
   LOG_LEVEL: T.Optional(T.Enum(LOG_LEVEL, { default: LOG_LEVEL.INFO })),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
+  UOS_AI_TOKEN: T.Optional(T.String()),
   SUPABASE_URL: T.String(),
   SUPABASE_KEY: T.String(),
   GITHUB_TOKEN: T.Optional(T.String()),
