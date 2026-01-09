@@ -34,12 +34,10 @@
     "open-source"
   ],
   "dependencies": {
-    "@actions/core": "^1.11.1",
-    "@actions/github": "^6.0.0",
     "@octokit/graphql-schema": "^15.26.0",
     "@sinclair/typebox": "0.34.41",
     "@supabase/supabase-js": "^2.74.0",
-    "@ubiquity-os/plugin-sdk": "3.7.0",
+    "@ubiquity-os/plugin-sdk": "^3.8.4",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
     "decimal.js": "^10.6.0",
     "ethers": "^6.15.0",
