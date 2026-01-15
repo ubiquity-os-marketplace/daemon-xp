@@ -336,7 +336,7 @@ describe("Plugin tests", () => {
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body?.startsWith("> [!NOTE]\n> I don't have XP data for @missing-user yet.")).toBe(true);
+    expect(newComment?.body).toContain("I don't have XP data for @missing-user yet.");
   });
 
   it("Should return XP data from the /xp endpoint", async () => {

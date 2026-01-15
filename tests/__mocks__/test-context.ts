@@ -102,10 +102,11 @@ export function createUnassignedContext(options: CreateUnassignedContextOptions)
   spyOn(context.octokit.graphql, "paginate").mockResolvedValue({
     repository: { issue: { closedByPullRequestsReferences: { edges: [] } } },
   } as unknown as Record<string, unknown>);
+  const debugSpy = spyOn(context.logger, "debug");
   const infoSpy = spyOn(context.logger, "info");
   const errorSpy = spyOn(context.logger, "error");
   const okSpy = spyOn(context.logger, "ok");
-  return { context, infoSpy, errorSpy, okSpy, supabaseAdapter };
+  return { context, debugSpy, infoSpy, errorSpy, okSpy, supabaseAdapter };
 }
 
 type CreateIssueCommentContextOptions = {
