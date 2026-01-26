@@ -1,5 +1,5 @@
 import { isBotActor } from "../github/is-bot-actor";
-import { ContextPlugin } from "../types/index";
+import { ContextPlugin, UserXpTotal } from "../types/index";
 import { isIssueCommentCreatedEvent, isPullRequestReviewCommentCreatedEvent, isPullRequestReviewSubmittedEvent } from "../types/typeguards";
 import { formatHandle, formatXp, sanitizeHandle, shouldReturnNoData } from "../xp/utils";
 
@@ -47,13 +47,14 @@ export async function handleXpCommand(context: ContextPlugin): Promise<void> {
     await context.commentHandler.postComment(context, context.logger.warn(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
     return;
   }
-  const total = await context.adapters.supabase.xp.getUserTotal(target.id);
+  const scopeIds = resolveScopeIds(context);
+  const total = await context.adapters.supabase.xp.getUserTotal(target.id, scopeIds);
   if (shouldReturnNoData(total)) {
     await context.commentHandler.postComment(context, context.logger.warn(`I don't have XP data for ${formatHandle(target.login)} yet.`));
     return;
   }
-  const formattedXp = formatXp(total.total);
-  await context.commentHandler.postComment(context, context.logger.ok(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
+  const body = buildXpCommentBody(target.login, total);
+  await context.commentHandler.postComment(context, context.logger.ok(body));
 }
 
 function getCommentBody(context: ContextPlugin): string | null {
@@ -123,4 +124,44 @@ function isNotFoundError(error: unknown): boolean {
   }
   const status = (error as { status?: number }).status;
   return status === 404;
+}
+
+export function buildXpCommentBody(login: string, totals: UserXpTotal): string {
+  const handle = formatHandle(login);
+  if (!totals.scopes) {
+    const formattedXp = formatXp(totals.total);
+    return `${handle} currently has ${formattedXp} XP.`;
+  }
+  const repoValue = formatScopeValue(totals.scopes.repo);
+  const orgValue = formatScopeValue(totals.scopes.org);
+  const globalValue = formatScopeValue(totals.scopes.global ?? totals.total);
+  const lines = [`### ${handle} XP`, "", `${toCode(repoValue)} repo / ${toCode(orgValue)} org / ${toCode(globalValue)} global`];
+  return lines.join("\n");
+}
+
+function resolveScopeIds(context: ContextPlugin): { repositoryId?: number; organizationId?: number } {
+  const repositoryId = toFiniteNumber(context.payload.repository?.id);
+  const organizationId = toFiniteNumber(context.payload.organization?.id) ?? toFiniteNumber(context.payload.repository?.owner?.id);
+  return { repositoryId, organizationId };
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value !== "number") {
+    return undefined;
+  }
+  if (!Number.isFinite(value)) {
+    return undefined;
+  }
+  return value;
+}
+
+function formatScopeValue(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "n/a";
+  }
+  return formatXp(value);
+}
+
+function toCode(value: string): string {
+  return `\`${value}\``;
 }

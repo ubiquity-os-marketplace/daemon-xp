@@ -302,11 +302,13 @@ describe("Plugin tests", () => {
 
     await runPlugin(context);
 
-    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId);
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, { repositoryId: 1, organizationId: 1 });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body).toContain("42.5 XP");
+    expect(newComment?.body).toContain("### @");
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("global");
   });
 
   it("Should post XP for the requested username when provided", async () => {
@@ -318,11 +320,13 @@ describe("Plugin tests", () => {
 
     await runPlugin(context);
 
-    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id);
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id, { repositoryId: 1, organizationId: 1 });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body?.startsWith("> [!TIP]\n> @requested-user currently has 17.25 XP.")).toBe(true);
+    expect(newComment?.body).toContain("### @requested-user XP");
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("global");
   });
 
   it("Should reply with no data when the requested user does not exist", async () => {

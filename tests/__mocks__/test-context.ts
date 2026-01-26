@@ -1,7 +1,7 @@
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { mock, spyOn } from "bun:test";
-import { ContextPlugin, Env, PluginSettings, SaveXpRecordInput, SupabaseAdapterContract, UserXpTotal } from "../../src/types/index";
+import { ContextPlugin, Env, PluginSettings, SaveXpRecordInput, SupabaseAdapterContract, UserXpScopeOptions, UserXpTotal } from "../../src/types/index";
 import { db } from "./db";
 import { createTimelineEvent } from "./helpers";
 export class SupabaseAdapterStub implements SupabaseAdapterContract {
@@ -18,7 +18,20 @@ export class SupabaseAdapterStub implements SupabaseAdapterContract {
       const permitCount = current.permitCount > 0 ? current.permitCount : 1;
       this._xpTotals.set(input.userId, { total: nextTotal, permitCount });
     }),
-    getUserTotal: mock(async (userId: number) => this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 }),
+    getUserTotal: mock(async (userId: number, options?: UserXpScopeOptions) => {
+      const current = this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 };
+      if (options?.repositoryId !== undefined || options?.organizationId !== undefined) {
+        return {
+          ...current,
+          scopes: {
+            global: current.total,
+            repo: current.total,
+            org: current.total,
+          },
+        };
+      }
+      return current;
+    }),
   };
 
   setUserTotal(userId: number, total: number, permitCount = 1) {
