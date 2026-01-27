@@ -318,6 +318,7 @@ describe("Plugin tests", () => {
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body).toContain("### @");
     expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
     expect(newComment?.body).toContain("global");
   });
 
@@ -339,6 +340,7 @@ describe("Plugin tests", () => {
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
     expect(newComment?.body).toContain("global");
   });
 
@@ -357,6 +359,11 @@ describe("Plugin tests", () => {
       organizationLogin: "ubiquity",
     });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
+    expect(newComment?.body).toContain("global");
   });
 
   it("Should post XP for the requested username when provided", async () => {
@@ -378,6 +385,7 @@ describe("Plugin tests", () => {
     const newComment = issueComments[issueComments.length - 1];
     expect(newComment?.body).toContain("### @requested-user XP");
     expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
     expect(newComment?.body).toContain("global");
   });
 

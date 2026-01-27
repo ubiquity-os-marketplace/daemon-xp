@@ -40,14 +40,11 @@ export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Data
   return scope.enabled ? applyScopes(result, totals, scope) : result;
 }
 
-function normalizeLocation(location: PermitRow["locations"]): PermitLocation | undefined {
+function normalizeLocation(location: PermitRow["locations"]): PermitLocation[] {
   if (!location) {
-    return undefined;
+    return [];
   }
-  if (Array.isArray(location)) {
-    return location[0] ?? undefined;
-  }
-  return location;
+  return Array.isArray(location) ? location.filter(Boolean) : [location];
 }
 
 async function fetchPermitPage(
@@ -80,12 +77,13 @@ function accumulateTotals(rows: PermitRow[], scope: ScopeInfo): { total: Decimal
     if (!scope.enabled) {
       continue;
     }
-    const location = normalizeLocation(row.locations);
-    const parsed = parseLocationScope(location?.node_url);
-    if (scope.repositoryFullName && parsed?.repositoryFullName === scope.repositoryFullName) {
+    const parsedLocations = normalizeLocation(row.locations)
+      .map((loc) => parseLocationScope(loc.node_url))
+      .filter(Boolean) as ParsedLocationScope[];
+    if (scope.repositoryFullName && parsedLocations.some((loc) => loc.repositoryFullName === scope.repositoryFullName)) {
       repo = repo.plus(decimalAmount);
     }
-    if (scope.organizationLogin && parsed?.ownerLogin === scope.organizationLogin) {
+    if (scope.organizationLogin && parsedLocations.some((loc) => loc.ownerLogin === scope.organizationLogin)) {
       org = org.plus(decimalAmount);
     }
   }
