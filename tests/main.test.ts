@@ -302,7 +302,11 @@ describe("Plugin tests", () => {
 
     await runPlugin(context);
 
-    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, { repositoryId: 1, organizationId: 1 });
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, {
+      repositoryOwner: "ubiquity",
+      repositoryName: "test-repo",
+      organizationLogin: "ubiquity",
+    });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
@@ -320,7 +324,11 @@ describe("Plugin tests", () => {
 
     await runPlugin(context);
 
-    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id, { repositoryId: 1, organizationId: 1 });
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id, {
+      repositoryOwner: "ubiquity",
+      repositoryName: "test-repo",
+      organizationLogin: "ubiquity",
+    });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];

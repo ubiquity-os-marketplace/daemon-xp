@@ -20,8 +20,9 @@ export type UserXpTotal = {
 };
 
 export type UserXpScopeOptions = {
-  repositoryId?: number;
-  organizationId?: number;
+  repositoryOwner?: string;
+  repositoryName?: string;
+  organizationLogin?: string;
 };
 
 export type SupabaseAdapterContract = {

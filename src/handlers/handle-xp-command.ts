@@ -139,20 +139,26 @@ export function buildXpCommentBody(login: string, totals: UserXpTotal): string {
   return lines.join("\n");
 }
 
-function resolveScopeIds(context: ContextPlugin): { repositoryId?: number; organizationId?: number } {
-  const repositoryId = toFiniteNumber(context.payload.repository?.id);
-  const organizationId = toFiniteNumber(context.payload.organization?.id) ?? toFiniteNumber(context.payload.repository?.owner?.id);
-  return { repositoryId, organizationId };
+function resolveScopeIds(context: ContextPlugin): { repositoryOwner?: string; repositoryName?: string; organizationLogin?: string } {
+  const repositoryOwner = toNonEmptyString(context.payload.repository?.owner?.login);
+  const repositoryName = toNonEmptyString(context.payload.repository?.name);
+  const organizationLogin = toNonEmptyString(context.payload.organization?.login) ?? repositoryOwner;
+  return {
+    repositoryOwner,
+    repositoryName,
+    organizationLogin,
+  };
 }
 
-function toFiniteNumber(value: unknown): number | undefined {
-  if (typeof value !== "number") {
+function toNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
     return undefined;
   }
-  if (!Number.isFinite(value)) {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
     return undefined;
   }
-  return value;
+  return trimmed;
 }
 
 function formatScopeValue(value: number | undefined): string {

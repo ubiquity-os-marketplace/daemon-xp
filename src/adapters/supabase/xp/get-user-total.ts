@@ -9,8 +9,7 @@ export const BASE_UNIT = new Decimal(10).pow(18);
 type Logger = Pick<Logs, "info" | "debug" | "ok" | "error">;
 
 type PermitLocation = {
-  repository_id: number | null;
-  organization_id: number | null;
+  node_url: string | null;
 };
 
 type PermitRow = {
@@ -20,8 +19,8 @@ type PermitRow = {
 
 type ScopeInfo = {
   enabled: boolean;
-  repositoryId?: number;
-  organizationId?: number;
+  repositoryFullName?: string;
+  organizationLogin?: string;
 };
 
 export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number, options?: UserXpScopeOptions): Promise<UserXpTotal> {
@@ -61,7 +60,7 @@ async function fetchPermitPage(
 ): Promise<PermitRow[]> {
   const permits = await client
     .from("permits")
-    .select(includeScopeData ? "amount,locations(repository_id,organization_id)" : "amount")
+    .select(includeScopeData ? "amount,locations(node_url)" : "amount")
     .eq("beneficiary_id", userId)
     .range(from, from + pageSize - 1);
   if (permits.error) {
@@ -82,10 +81,11 @@ function accumulateTotals(rows: PermitRow[], scope: ScopeInfo): { total: Decimal
       continue;
     }
     const location = normalizeLocation(row.locations);
-    if (scope.repositoryId !== undefined && location?.repository_id === scope.repositoryId) {
+    const parsed = parseLocationScope(location?.node_url);
+    if (scope.repositoryFullName && parsed?.repositoryFullName === scope.repositoryFullName) {
       repo = repo.plus(decimalAmount);
     }
-    if (scope.organizationId !== undefined && location?.organization_id === scope.organizationId) {
+    if (scope.organizationLogin && parsed?.ownerLogin === scope.organizationLogin) {
       org = org.plus(decimalAmount);
     }
   }
@@ -123,12 +123,14 @@ async function collectTotals(
 }
 
 function buildScope(options?: UserXpScopeOptions): ScopeInfo {
-  const repositoryId = typeof options?.repositoryId === "number" ? options.repositoryId : undefined;
-  const organizationId = typeof options?.organizationId === "number" ? options.organizationId : undefined;
+  const repositoryOwner = toLowerNonEmptyString(options?.repositoryOwner);
+  const repositoryName = toLowerNonEmptyString(options?.repositoryName);
+  const repositoryFullName = repositoryOwner && repositoryName ? `${repositoryOwner}/${repositoryName}` : undefined;
+  const organizationLogin = toLowerNonEmptyString(options?.organizationLogin);
   return {
-    enabled: repositoryId !== undefined || organizationId !== undefined,
-    repositoryId,
-    organizationId,
+    enabled: repositoryFullName !== undefined || organizationLogin !== undefined,
+    repositoryFullName,
+    organizationLogin,
   };
 }
 
@@ -144,8 +146,8 @@ function buildEmptyTotal(scope: ScopeInfo): UserXpTotal {
     ...empty,
     scopes: {
       global: 0,
-      repo: scope.repositoryId !== undefined ? 0 : undefined,
-      org: scope.organizationId !== undefined ? 0 : undefined,
+      repo: scope.repositoryFullName !== undefined ? 0 : undefined,
+      org: scope.organizationLogin !== undefined ? 0 : undefined,
     },
   };
 }
@@ -155,8 +157,53 @@ function applyScopes(result: UserXpTotal, totals: { repoTotal: Decimal; orgTotal
     ...result,
     scopes: {
       global: result.total,
-      repo: scope.repositoryId !== undefined ? totals.repoTotal.div(BASE_UNIT).toNumber() : undefined,
-      org: scope.organizationId !== undefined ? totals.orgTotal.div(BASE_UNIT).toNumber() : undefined,
+      repo: scope.repositoryFullName !== undefined ? totals.repoTotal.div(BASE_UNIT).toNumber() : undefined,
+      org: scope.organizationLogin !== undefined ? totals.orgTotal.div(BASE_UNIT).toNumber() : undefined,
     },
   };
+}
+
+type ParsedLocationScope = {
+  ownerLogin: string;
+  repositoryName: string;
+  repositoryFullName: string;
+};
+
+function parseLocationScope(nodeUrl: string | null | undefined): ParsedLocationScope | undefined {
+  if (!nodeUrl) {
+    return undefined;
+  }
+  try {
+    const url = new URL(nodeUrl);
+    const segments = url.pathname.split("/").filter((segment) => segment.length > 0);
+    if (segments.length < 2) {
+      return undefined;
+    }
+    let owner = segments[0];
+    let repo = segments[1];
+    if (segments[0] === "repos" && segments.length >= 3) {
+      owner = segments[1];
+      repo = segments[2];
+    }
+    const ownerLogin = owner.toLowerCase();
+    const repositoryName = repo.toLowerCase();
+    return {
+      ownerLogin,
+      repositoryName,
+      repositoryFullName: `${ownerLogin}/${repositoryName}`,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function toLowerNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  return trimmed.toLowerCase();
 }

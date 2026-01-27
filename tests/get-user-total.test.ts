@@ -13,12 +13,10 @@ type PermitRow = {
   amount: string;
   locations?:
     | {
-        repository_id: number | null;
-        organization_id: number | null;
+        node_url: string | null;
       }
     | {
-        repository_id: number | null;
-        organization_id: number | null;
+        node_url: string | null;
       }[]
     | null;
 };
@@ -40,17 +38,17 @@ function createSupabaseClient(pages: PermitRow[][]) {
 }
 
 describe("fetchUserTotal", () => {
-  it("computes scoped totals when repository and organization ids are provided", async () => {
+  it("computes scoped totals by parsing repository and organization from node_url", async () => {
     const pages: PermitRow[][] = [
       [
-        { amount: "1000000000000000000", locations: { repository_id: 10, organization_id: 20 } },
-        { amount: "2500000000000000000", locations: [{ repository_id: 11, organization_id: 20 }] },
-        { amount: "500000000000000000", locations: { repository_id: 10, organization_id: 21 } },
-        { amount: "1000000000000000000", locations: null },
+        { amount: "1000000000000000000", locations: { node_url: "https://github.com/ubiquity/repo-a/issues/1" } },
+        { amount: "2000000000000000000", locations: [{ node_url: "https://github.com/ubiquity/repo-b/issues/2" }] },
+        { amount: "500000000000000000", locations: { node_url: "https://github.com/ubiquity/repo-a/issues/3" } },
+        { amount: "1500000000000000000", locations: { node_url: "https://github.com/other-org/repo-c/issues/4" } },
       ],
     ];
     const client = createSupabaseClient(pages);
-    const options: UserXpScopeOptions = { repositoryId: 10, organizationId: 20 };
+    const options: UserXpScopeOptions = { repositoryOwner: "ubiquity", repositoryName: "repo-a", organizationLogin: "ubiquity" };
 
     const result = await fetchUserTotal(logger, client, 1, options);
 

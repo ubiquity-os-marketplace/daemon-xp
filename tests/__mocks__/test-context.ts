@@ -20,7 +20,7 @@ export class SupabaseAdapterStub implements SupabaseAdapterContract {
     }),
     getUserTotal: mock(async (userId: number, options?: UserXpScopeOptions) => {
       const current = this._xpTotals.get(userId) ?? { total: 0, permitCount: 0 };
-      if (options?.repositoryId !== undefined || options?.organizationId !== undefined) {
+      if (options?.repositoryOwner || options?.repositoryName || options?.organizationLogin) {
         return {
           ...current,
           scopes: {
