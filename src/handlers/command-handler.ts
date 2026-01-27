@@ -1,10 +1,10 @@
 import { ContextPlugin } from "../types/index";
-import { isIssueCommentCreatedEvent } from "../types/typeguards";
+import { isXpCommandEvent } from "../types/typeguards";
 import { handleXpCommand } from "./handle-xp-command";
 
 export async function handleCommand(context: ContextPlugin) {
-  if (!isIssueCommentCreatedEvent(context)) {
-    context.logger.debug("Received non-issue comment event, won't proceed with the LLM command.");
+  if (!isXpCommandEvent(context)) {
+    context.logger.debug("Received unsupported event for command handling, won't proceed with the LLM command.");
     return;
   }
   if (!context.command) {

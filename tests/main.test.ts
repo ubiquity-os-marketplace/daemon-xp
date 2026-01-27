@@ -11,7 +11,13 @@ import { Env } from "../src/types/index";
 import { db } from "./__mocks__/db";
 import { setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
-import { createIssueCommentContext, createUnassignedContext, SupabaseAdapterStub } from "./__mocks__/test-context";
+import {
+  createIssueCommentContext,
+  createReviewCommentContext,
+  createReviewSubmittedContext,
+  createUnassignedContext,
+  SupabaseAdapterStub,
+} from "./__mocks__/test-context";
 
 const octokit = new Octokit();
 type FetchUserTotal = typeof import("../src/adapters/supabase/xp/get-user-total").fetchUserTotal;
@@ -313,6 +319,36 @@ describe("Plugin tests", () => {
     expect(newComment?.body).toContain("### @");
     expect(newComment?.body).toContain("repo /");
     expect(newComment?.body).toContain("global");
+  });
+
+  it("Should post XP for /xp commands from PR review comments", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, 12.5, 1);
+    const { context } = createReviewCommentContext({ supabaseAdapter: supabase, commenterId, reviewBody: "/xp", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, { repositoryId: 1, organizationId: 1 });
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("global");
+  });
+
+  it("Should post XP for /xp commands from PR review submissions", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, 7.25, 1);
+    const { context } = createReviewSubmittedContext({ supabaseAdapter: supabase, commenterId, reviewBody: "/xp", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, { repositoryId: 1, organizationId: 1 });
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
   });
 
   it("Should post XP for the requested username when provided", async () => {

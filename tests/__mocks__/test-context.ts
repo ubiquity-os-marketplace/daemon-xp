@@ -171,3 +171,94 @@ export function createIssueCommentContext(options: CreateIssueCommentContextOpti
   } as unknown as Record<string, unknown>);
   return { context, supabaseAdapter };
 }
+
+type CreateReviewContextOptions = {
+  supabaseAdapter?: SupabaseAdapterContract;
+  reviewBody?: string;
+  commenterId?: number;
+  config?: Partial<PluginSettings>;
+  octokit: ContextPlugin["octokit"];
+};
+
+function createReviewBase(options: CreateReviewContextOptions) {
+  const supabaseAdapter = options.supabaseAdapter ?? new SupabaseAdapterStub();
+  const repoRecord = db.repo.findFirst({ where: { id: { equals: 1 } } });
+  const issueRecord = db.issue.findFirst({ where: { id: { equals: 1 } } });
+  const commenterRecord = db.users.findFirst({ where: { id: { equals: options.commenterId ?? 1 } } });
+  if (!repoRecord || !issueRecord || !commenterRecord) {
+    throw new Error("Test fixtures missing required records for review context");
+  }
+  const repo = repoRecord as unknown as ContextPlugin<"issue_comment.created">["payload"]["repository"];
+  const issue = issueRecord as unknown as ContextPlugin<"issue_comment.created">["payload"]["issue"];
+  const sender = { ...commenterRecord, type: "User" } as unknown as ContextPlugin<"issue_comment.created">["payload"]["sender"];
+  const pullRequest = {
+    number: issue.number,
+    id: issue.id,
+    user: sender,
+  } as unknown as ContextPlugin<"pull_request_review_comment.created">["payload"]["pull_request"];
+
+  const base = {
+    command: { name: "xp", parameters: { username: commenterRecord.login } },
+    payload: {
+      repository: repo,
+      organization: { login: repo.owner.login, id: repo.owner.id },
+      sender,
+      issue,
+      pull_request: pullRequest,
+      installation: { id: 1 } as ContextPlugin["payload"]["installation"],
+    },
+    logger: new Logs("debug"),
+    config: (options.config ?? {}) as PluginSettings,
+    env: { SUPABASE_URL: "https://supabase.test", SUPABASE_KEY: "test-key" } as Env,
+    octokit: options.octokit,
+    commentHandler: new CommentHandler(),
+    adapters: { supabase: supabaseAdapter },
+  };
+  spyOn(base.octokit.graphql, "paginate").mockResolvedValue({
+    repository: { issue: { closedByPullRequestsReferences: { edges: [] } } },
+  } as unknown as Record<string, unknown>);
+  return { base, supabaseAdapter, commenterRecord };
+}
+
+export function createReviewCommentContext(options: CreateReviewContextOptions) {
+  const { base, supabaseAdapter, commenterRecord } = createReviewBase(options);
+  const comment = {
+    id: Date.now(),
+    body: options.reviewBody ?? "/xp",
+    user: { login: commenterRecord.login, id: commenterRecord.id, type: "User" },
+  } as ContextPlugin<"pull_request_review_comment.created">["payload"]["comment"];
+
+  const context = {
+    ...base,
+    eventName: "pull_request_review_comment.created",
+    payload: {
+      ...base.payload,
+      action: "created",
+      comment,
+    },
+  } as unknown as ContextPlugin<"pull_request_review_comment.created">;
+
+  return { context, supabaseAdapter };
+}
+
+export function createReviewSubmittedContext(options: CreateReviewContextOptions) {
+  const { base, supabaseAdapter } = createReviewBase(options);
+  const review = {
+    id: Date.now(),
+    body: options.reviewBody ?? "/xp",
+    user: base.payload.sender,
+    state: "commented",
+  } as ContextPlugin<"pull_request_review.submitted">["payload"]["review"];
+
+  const context = {
+    ...base,
+    eventName: "pull_request_review.submitted",
+    payload: {
+      ...base.payload,
+      action: "submitted",
+      review,
+    },
+  } as unknown as ContextPlugin<"pull_request_review.submitted">;
+
+  return { context, supabaseAdapter };
+}

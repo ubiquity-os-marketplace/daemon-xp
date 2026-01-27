@@ -29,7 +29,7 @@ describe("handleCommand", () => {
 
     await handleCommand(context);
 
-    expect(debug).toHaveBeenCalledWith("Received non-issue comment event, won't proceed with the LLM command.");
+    expect(debug).toHaveBeenCalledWith("Received unsupported event for command handling, won't proceed with the LLM command.");
     expect(xpSpy).not.toHaveBeenCalled();
   });
 
@@ -61,5 +61,14 @@ describe("handleCommand", () => {
 
     expect(xpSpy).toHaveBeenCalledWith(context);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("delegates to the XP handler for review thread commands", async () => {
+    const xpSpy = spyOn(xpHandler, "handleXpCommand").mockResolvedValue();
+    const { context } = createTestContext({ eventName: "pull_request_review_comment.created" });
+
+    await handleCommand(context);
+
+    expect(xpSpy).toHaveBeenCalledWith(context);
   });
 });
