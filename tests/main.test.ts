@@ -11,7 +11,13 @@ import { Env } from "../src/types/index";
 import { db } from "./__mocks__/db";
 import { setupTests } from "./__mocks__/helpers";
 import { server } from "./__mocks__/node";
-import { createIssueCommentContext, createUnassignedContext, SupabaseAdapterStub } from "./__mocks__/test-context";
+import {
+  createIssueCommentContext,
+  createReviewCommentContext,
+  createReviewSubmittedContext,
+  createUnassignedContext,
+  SupabaseAdapterStub,
+} from "./__mocks__/test-context";
 
 const octokit = new Octokit();
 type FetchUserTotal = typeof import("../src/adapters/supabase/xp/get-user-total").fetchUserTotal;
@@ -302,11 +308,62 @@ describe("Plugin tests", () => {
 
     await runPlugin(context);
 
-    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId);
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, {
+      repositoryOwner: "ubiquity",
+      repositoryName: "test-repo",
+      organizationLogin: "ubiquity",
+    });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body).toContain("42.5 XP");
+    expect(newComment?.body).toContain("### @");
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
+    expect(newComment?.body).toContain("global");
+  });
+
+  it("Should post XP for /xp commands from PR review comments", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, 12.5, 1);
+    const { context } = createReviewCommentContext({ supabaseAdapter: supabase, commenterId, reviewBody: "/xp", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, {
+      repositoryOwner: "ubiquity",
+      repositoryName: "test-repo",
+      organizationLogin: "ubiquity",
+    });
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
+    expect(newComment?.body).toContain("global");
+  });
+
+  it("Should post XP for /xp commands from PR review submissions", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, 7.25, 1);
+    const { context } = createReviewSubmittedContext({ supabaseAdapter: supabase, commenterId, reviewBody: "/xp", octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(commenterId, {
+      repositoryOwner: "ubiquity",
+      repositoryName: "test-repo",
+      organizationLogin: "ubiquity",
+    });
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
+    expect(newComment?.body).toContain("global");
   });
 
   it("Should post XP for the requested username when provided", async () => {
@@ -318,11 +375,18 @@ describe("Plugin tests", () => {
 
     await runPlugin(context);
 
-    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id);
+    expect(supabase.xp.getUserTotal).toHaveBeenCalledWith(targetUser.id, {
+      repositoryOwner: "ubiquity",
+      repositoryName: "test-repo",
+      organizationLogin: "ubiquity",
+    });
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body?.startsWith("> [!TIP]\n> @requested-user currently has 17.25 XP.")).toBe(true);
+    expect(newComment?.body).toContain("### @requested-user XP");
+    expect(newComment?.body).toContain("repo /");
+    expect(newComment?.body).toContain("org");
+    expect(newComment?.body).toContain("global");
   });
 
   it("Should reply with no data when the requested user does not exist", async () => {
@@ -336,7 +400,7 @@ describe("Plugin tests", () => {
     expect(db.issueComments.count()).toBe(commentCountBefore + 1);
     const issueComments = db.issueComments.getAll();
     const newComment = issueComments[issueComments.length - 1];
-    expect(newComment?.body?.startsWith("> [!NOTE]\n> I don't have XP data for @missing-user yet.")).toBe(true);
+    expect(newComment?.body).toContain("I don't have XP data for @missing-user yet.");
   });
 
   it("Should return XP data from the /xp endpoint", async () => {

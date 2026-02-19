@@ -57,6 +57,17 @@ export const handlers = [
     db.issueComments.create(newItem);
     return HttpResponse.json(newItem);
   }),
+  // reply to review comment
+  http.post(
+    "https://api.github.com/repos/:owner/:repo/pulls/:pull_number/comments/:comment_id/replies",
+    async ({ params: { pull_number: pullNumber }, request }) => {
+      const { body } = await getValue(request.body);
+      const id = db.issueComments.count() + 1;
+      const newItem = { id, body, issue_number: Number(pullNumber), user: db.users.getAll()[0] };
+      db.issueComments.create(newItem);
+      return HttpResponse.json(newItem, { status: 201 });
+    }
+  ),
   // update comment
   http.patch("https://api.github.com/repos/:owner/:repo/issues/comments/:id", async ({ params: { issue_number: issueNumber }, request }) => {
     const { body } = await getValue(request.body);

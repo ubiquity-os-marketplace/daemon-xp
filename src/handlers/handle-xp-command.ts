@@ -1,5 +1,5 @@
 import { isBotActor } from "../github/is-bot-actor";
-import { ContextPlugin } from "../types/index";
+import { ContextPlugin, UserXpTotal } from "../types/index";
 import { isIssueCommentCreatedEvent, isPullRequestReviewCommentCreatedEvent, isPullRequestReviewSubmittedEvent } from "../types/typeguards";
 import { formatHandle, formatXp, sanitizeHandle, shouldReturnNoData } from "../xp/utils";
 
@@ -23,7 +23,7 @@ type TargetUser = {
 export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   const commentBody = getCommentBody(context);
   if (!commentBody) {
-    context.logger.warn("No comment body found for XP command event.");
+    context.logger.debug("No comment body found for XP command event.");
     return;
   }
   let parsed = parseCommand(commentBody);
@@ -31,29 +31,30 @@ export async function handleXpCommand(context: ContextPlugin): Promise<void> {
   if (context.command) {
     parsed = { username: context.command.parameters.username ?? context.payload.sender.login };
   } else if (!parsed) {
-    context.logger.warn("Invalid XP command format.", { commentBody });
+    context.logger.debug("Invalid XP command format.", { commentBody });
     return;
   }
   const sender = getSender(context);
   if (!sender || !sender.login || typeof sender.id !== "number") {
-    throw context.logger.error("Sender information missing for XP command event.");
+    throw context.logger.warn("Sender information missing for XP command event.");
   }
   if (isBotActor({ login: sender.login, type: sender.type })) {
-    context.logger.info("Ignoring XP command from bot sender.");
+    context.logger.debug("Ignoring XP command from bot sender.");
     return;
   }
   const target = await resolveTargetUser(context, sender, parsed);
   if (!target) {
-    await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
+    await context.commentHandler.postComment(context, context.logger.warn(`I don't have XP data for ${formatHandle(parsed.username ?? sender.login)} yet.`));
     return;
   }
-  const total = await context.adapters.supabase.xp.getUserTotal(target.id);
+  const scopeIds = resolveScopeIds(context);
+  const total = await context.adapters.supabase.xp.getUserTotal(target.id, scopeIds);
   if (shouldReturnNoData(total)) {
-    await context.commentHandler.postComment(context, context.logger.info(`I don't have XP data for ${formatHandle(target.login)} yet.`));
+    await context.commentHandler.postComment(context, context.logger.warn(`I don't have XP data for ${formatHandle(target.login)} yet.`));
     return;
   }
-  const formattedXp = formatXp(total.total);
-  await context.commentHandler.postComment(context, context.logger.ok(`${formatHandle(target.login)} currently has ${formattedXp} XP.`));
+  const body = buildXpCommentBody(target.login, total);
+  await context.commentHandler.postComment(context, context.logger.ok(body));
 }
 
 function getCommentBody(context: ContextPlugin): string | null {
@@ -107,7 +108,7 @@ async function resolveTargetUser(context: ContextPlugin, sender: Sender, parsed:
     };
   } catch (err) {
     if (isNotFoundError(err)) {
-      context.logger.info(`User ${parsed.username} not found on GitHub.`);
+      context.logger.warn(`User ${parsed.username} not found on GitHub.`);
       return undefined;
     }
     throw context.logger.error(`Failed to fetch user information from GitHub for ${parsed.username}`, {
@@ -123,4 +124,50 @@ function isNotFoundError(error: unknown): boolean {
   }
   const status = (error as { status?: number }).status;
   return status === 404;
+}
+
+export function buildXpCommentBody(login: string, totals: UserXpTotal): string {
+  const handle = formatHandle(login);
+  if (!totals.scopes) {
+    const formattedXp = formatXp(totals.total);
+    return `${handle} currently has ${formattedXp} XP.`;
+  }
+  const repoValue = formatScopeValue(totals.scopes.repo);
+  const orgValue = formatScopeValue(totals.scopes.org);
+  const globalValue = formatScopeValue(totals.scopes.global ?? totals.total);
+  const lines = [`### ${handle} XP`, "", `${toCode(repoValue)} repo / ${toCode(orgValue)} org / ${toCode(globalValue)} global`];
+  return lines.join("\n");
+}
+
+function resolveScopeIds(context: ContextPlugin): { repositoryOwner?: string; repositoryName?: string; organizationLogin?: string } {
+  const repositoryOwner = toNonEmptyString(context.payload.repository?.owner?.login);
+  const repositoryName = toNonEmptyString(context.payload.repository?.name);
+  const organizationLogin = toNonEmptyString(context.payload.organization?.login) ?? repositoryOwner;
+  return {
+    repositoryOwner,
+    repositoryName,
+    organizationLogin,
+  };
+}
+
+function toNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  return trimmed;
+}
+
+function formatScopeValue(value: number | undefined): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "n/a";
+  }
+  return formatXp(value);
+}
+
+function toCode(value: string): string {
+  return `\`${value}\``;
 }

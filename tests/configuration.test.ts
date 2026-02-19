@@ -33,7 +33,7 @@ describe("Configuration", () => {
 
   it("Should skip posting comments when disabled", async () => {
     const supabase = new SupabaseAdapterStub();
-    const { context, infoSpy } = createUnassignedContext({
+    const { context, debugSpy } = createUnassignedContext({
       supabaseAdapter: supabase,
       timelineActorType: "Bot",
       priceLabel: "Price: 20",
@@ -47,6 +47,6 @@ describe("Configuration", () => {
 
     expect(supabase.calls).toHaveLength(1);
     expect(db.issueComments.count()).toBe(commentCountBefore);
-    expect(infoSpy).toHaveBeenCalledWith("Comment posting disabled via configuration.");
+    expect(debugSpy).toHaveBeenCalledWith("Comment posting disabled via configuration.");
   });
 });
