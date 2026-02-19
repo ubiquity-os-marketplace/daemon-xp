@@ -1,8 +1,7 @@
 {
-  "name": "daemon-xp",
+  "name": "@ubiquity-os/daemon-xp",
+  "short_name": "ubiquity-os-marketplace/daemon-xp@main",
   "description": "Handles XP for users.",
-  "skipBotEvents": false,
-  "ubiquity:listeners": ["issues.unassigned", "issue_comment.created", "pull_request_review_comment.created", "pull_request_review.submitted"],
   "commands": {
     "xp": {
       "ubiquity:example": "/xp @username",
@@ -18,6 +17,8 @@
       }
     }
   },
+  "ubiquity:listeners": ["issues.unassigned", "pull_request_review_comment.created", "pull_request_review.submitted"],
+  "skipBotEvents": false,
   "configuration": {
     "default": {},
     "type": "object",
@@ -34,6 +35,5 @@
       }
     }
   },
-  "homepage_url": "https://daemon-xp-development.deno.dev",
-  "short_name": "ubiquity-os-marketplace/daemon-xp@development"
+  "homepage_url": "https://daemon-xp-development.deno.dev"
 }
