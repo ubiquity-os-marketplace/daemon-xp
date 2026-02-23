@@ -22,7 +22,7 @@
     "knip-ci": "knip --no-exit-code --reporter json --config .github/knip.ts",
     "test": "bun test --coverage",
     "dev": "bun run --port 4000 --no-clear-screen --watch src/worker.ts",
-    "prepare": "husky && bun run supabase:generate:remote",
+    "prepare": "bun run prepare:manifest && husky && bun run supabase:generate:remote",
     "supabase-types": "cross-env-shell supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/adapters/supabase/generated-types.ts",
     "supabase:generate:remote": "dotenv -- bun run supabase-types",
     "prepare:manifest": "bun x @ubiquity-os/plugin-manifest-tool .",
