@@ -25,7 +25,7 @@
     "prepare": "bun run prepare:manifest && husky && bun run supabase:generate:remote",
     "supabase-types": "cross-env-shell supabase gen types typescript --project-id $SUPABASE_PROJECT_ID --schema public > src/adapters/supabase/generated-types.ts",
     "supabase:generate:remote": "dotenv -- bun run supabase-types",
-    "prepare:manifest": "bun x @ubiquity-os/plugin-manifest-tool@main .",
+    "prepare:manifest": "bun x @ubiquity-os/plugin-manifest-tool@latest .",
     "prebuild": "bun run prepare:manifest",
     "predev": "bun run prepare:manifest"
   },
