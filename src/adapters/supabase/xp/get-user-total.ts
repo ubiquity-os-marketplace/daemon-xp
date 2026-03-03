@@ -6,6 +6,10 @@ import { Database } from "../generated-types";
 
 export const BASE_UNIT = new Decimal(10).pow(18);
 
+const XP_TABLES = ["permits", "negative_permits"] as const;
+
+type XpTableName = (typeof XP_TABLES)[number];
+
 type Logger = Pick<Logs, "info" | "debug" | "ok" | "error">;
 
 type PermitLocation = {
@@ -50,18 +54,19 @@ function normalizeLocation(location: PermitRow["locations"]): PermitLocation[] {
 async function fetchPermitPage(
   logger: Logger,
   client: SupabaseClient<Database>,
+  tableName: XpTableName,
   userId: number,
   from: number,
   pageSize: number,
   includeScopeData: boolean
 ): Promise<PermitRow[]> {
   const permits = await client
-    .from("permits")
+    .from(tableName)
     .select(includeScopeData ? "amount,locations(node_url)" : "amount")
     .eq("beneficiary_id", userId)
     .range(from, from + pageSize - 1);
   if (permits.error) {
-    throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
+    throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error, table: tableName });
   }
   return (permits.data ?? []) as unknown as PermitRow[];
 }
@@ -90,9 +95,10 @@ function accumulateTotals(rows: PermitRow[], scope: ScopeInfo): { total: Decimal
   return { total, repo, org };
 }
 
-async function collectTotals(
+async function collectTableTotals(
   logger: Logger,
   client: SupabaseClient<Database>,
+  tableName: XpTableName,
   userId: number,
   scope: ScopeInfo
 ): Promise<{ total: Decimal; repoTotal: Decimal; orgTotal: Decimal; permitCount: number }> {
@@ -102,8 +108,9 @@ async function collectTotals(
   let total = new Decimal(0);
   let repoTotal = new Decimal(0);
   let orgTotal = new Decimal(0);
+
   while (true) {
-    const rows = await fetchPermitPage(logger, client, userId, from, pageSize, scope.enabled);
+    const rows = await fetchPermitPage(logger, client, tableName, userId, from, pageSize, scope.enabled);
     if (rows.length === 0) {
       break;
     }
@@ -117,6 +124,29 @@ async function collectTotals(
     }
     from += pageSize;
   }
+
+  return { total, repoTotal, orgTotal, permitCount };
+}
+
+async function collectTotals(
+  logger: Logger,
+  client: SupabaseClient<Database>,
+  userId: number,
+  scope: ScopeInfo
+): Promise<{ total: Decimal; repoTotal: Decimal; orgTotal: Decimal; permitCount: number }> {
+  let total = new Decimal(0);
+  let repoTotal = new Decimal(0);
+  let orgTotal = new Decimal(0);
+  let permitCount = 0;
+
+  for (const tableName of XP_TABLES) {
+    const tableTotals = await collectTableTotals(logger, client, tableName, userId, scope);
+    total = total.plus(tableTotals.total);
+    repoTotal = repoTotal.plus(tableTotals.repoTotal);
+    orgTotal = orgTotal.plus(tableTotals.orgTotal);
+    permitCount += tableTotals.permitCount;
+  }
+
   return { total, repoTotal, orgTotal, permitCount };
 }
 

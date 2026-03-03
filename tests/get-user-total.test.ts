@@ -21,25 +21,29 @@ type PermitRow = {
     | null;
 };
 
-function createSupabaseClient(pages: PermitRow[][]) {
-  let callIndex = 0;
-  const builder = {
-    select: () => builder,
-    eq: () => builder,
+function createSupabaseClient(tablePages: Record<string, PermitRow[][]>) {
+  const tableCallIndex = new Map<string, number>();
+
+  const createBuilder = (tableName: string) => ({
+    select: () => createBuilder(tableName),
+    eq: () => createBuilder(tableName),
     range: async () => {
-      const data = pages[callIndex] ?? [];
-      callIndex += 1;
+      const currentIndex = tableCallIndex.get(tableName) ?? 0;
+      const pages = tablePages[tableName] ?? [];
+      const data = pages[currentIndex] ?? [];
+      tableCallIndex.set(tableName, currentIndex + 1);
       return { data, error: null };
     },
-  };
+  });
+
   return {
-    from: () => builder,
+    from: (tableName: string) => createBuilder(tableName),
   } as unknown as Parameters<typeof fetchUserTotal>[1];
 }
 
 describe("fetchUserTotal", () => {
   it("computes scoped totals by parsing repository and organization from node_url", async () => {
-    const pages: PermitRow[][] = [
+    const permitsPages: PermitRow[][] = [
       [
         { amount: "1000000000000000000", locations: { node_url: "https://github.com/ubiquity/repo-a/issues/1" } },
         { amount: "2000000000000000000", locations: [{ node_url: "https://github.com/ubiquity/repo-b/issues/2" }] },
@@ -47,7 +51,7 @@ describe("fetchUserTotal", () => {
         { amount: "1500000000000000000", locations: { node_url: "https://github.com/other-org/repo-c/issues/4" } },
       ],
     ];
-    const client = createSupabaseClient(pages);
+    const client = createSupabaseClient({ permits: permitsPages });
     const options: UserXpScopeOptions = { repositoryOwner: "ubiquity", repositoryName: "repo-a", organizationLogin: "ubiquity" };
 
     const result = await fetchUserTotal(logger, client, 1, options);
@@ -59,9 +63,29 @@ describe("fetchUserTotal", () => {
     expect(result.scopes?.org).toBeCloseTo(3.5, 5);
   });
 
+  it("aggregates totals across positive and negative XP tables", async () => {
+    const client = createSupabaseClient({
+      permits: [[{ amount: "2000000000000000000", locations: { node_url: "https://github.com/ubiquity/repo-a/issues/1" } }]],
+      negative_permits: [
+        [
+          { amount: "-500000000000000000", locations: { node_url: "https://github.com/ubiquity/repo-a/issues/2" } },
+          { amount: "-250000000000000000", locations: { node_url: "https://github.com/other-org/repo-z/issues/3" } },
+        ],
+      ],
+    });
+
+    const options: UserXpScopeOptions = { repositoryOwner: "ubiquity", repositoryName: "repo-a", organizationLogin: "ubiquity" };
+    const result = await fetchUserTotal(logger, client, 1, options);
+
+    expect(result.permitCount).toBe(3);
+    expect(result.total).toBeCloseTo(1.25, 5);
+    expect(result.scopes?.global).toBeCloseTo(1.25, 5);
+    expect(result.scopes?.repo).toBeCloseTo(1.5, 5);
+    expect(result.scopes?.org).toBeCloseTo(1.5, 5);
+  });
+
   it("omits scopes when no scope options are provided", async () => {
-    const pages: PermitRow[][] = [[{ amount: "1000000000000000000" }]];
-    const client = createSupabaseClient(pages);
+    const client = createSupabaseClient({ permits: [[{ amount: "1000000000000000000" }]] });
 
     const result = await fetchUserTotal(logger, client, 1);
 
