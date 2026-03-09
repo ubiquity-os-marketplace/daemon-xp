@@ -1,0 +1,47 @@
+{
+  "name": "@ubiquity-os/daemon-xp",
+  "short_name": "ubiquity-os-marketplace/daemon-xp@development",
+  "description": "Handles XP for users.",
+  "commands": {
+    "xp": {
+      "description": "Gets the XP for a user. If no user is specified, the user who invoked the command will be used.",
+      "ubiquity:example": "/xp @username",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "description": "GitHub username to get XP for.",
+            "examples": [
+              "@UbiquityOS"
+            ],
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "ubiquity:listeners": [
+    "issues.unassigned",
+    "issue_comment.created",
+    "pull_request_review_comment.created",
+    "pull_request_review.submitted"
+  ],
+  "skipBotEvents": true,
+  "configuration": {
+    "default": {},
+    "type": "object",
+    "properties": {
+      "disableCommentPosting": {
+        "description": "Set to true to prevent XP updates from being posted back to GitHub.",
+        "default": false,
+        "type": "boolean"
+      },
+      "disqualificationBanThreshold": {
+        "description": "Ban the user from the organization when their XP falls below this value after a disqualification.",
+        "default": -2000,
+        "type": "number"
+      }
+    }
+  },
+  "homepage_url": "https://daemon-xp-development.deno.dev"
+}
