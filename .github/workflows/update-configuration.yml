@@ -119,6 +119,13 @@ jobs:
         if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
         run: deno install --node-modules-dir=auto --no-lock
 
+      - name: Generate Supabase types
+        if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
+        run: deno run -A npm:supabase@2.54.11 gen types typescript --project-id "$SUPABASE_PROJECT_ID" --schema public > src/adapters/supabase/generated-types.ts
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
       - name: Generate manifest for deploy
         if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
         run: deno x -A -y --no-lock npm:@ubiquity-os/plugin-manifest-tool@latest
