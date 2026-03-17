@@ -117,13 +117,23 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Set up Node.js
+        if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24.11.0
+
       - name: Install dependencies
         if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
         run: deno install --node-modules-dir=auto --no-lock
 
+      - name: Install Supabase CLI
+        if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
+        run: npm install --global supabase@2.54.11
+
       - name: Generate Supabase types
         if: ${{ env.DEPLOY_DENO_ENABLED == 'true' && steps.refs.outputs.is_tag_ref != 'true' && steps.refs.outputs.is_artifact_ref != 'true' && github.event_name != 'delete' }}
-        run: npx supabase gen types typescript --project-id "$SUPABASE_PROJECT_ID" --schema public > src/adapters/supabase/generated-types.ts
+        run: supabase gen types typescript --project-id "$SUPABASE_PROJECT_ID" --schema public > src/adapters/supabase/generated-types.ts
         env:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
