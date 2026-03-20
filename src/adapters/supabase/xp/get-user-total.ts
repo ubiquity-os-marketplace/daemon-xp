@@ -7,14 +7,15 @@ import { Database } from "../generated-types";
 export const BASE_UNIT = new Decimal(10).pow(18);
 
 type Logger = Pick<Logs, "info" | "debug" | "ok" | "error">;
+type XpRecordTable = "permits" | "xp_penalties";
 
-type PermitLocation = {
+type XpRecordLocation = {
   node_url: string | null;
 };
 
-type PermitRow = {
+type XpRecordRow = {
   amount: string | null;
-  locations?: PermitLocation | PermitLocation[] | null;
+  locations?: XpRecordLocation | XpRecordLocation[] | null;
 };
 
 type ScopeInfo = {
@@ -24,15 +25,15 @@ type ScopeInfo = {
 };
 
 export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Database>, userId: number, options?: UserXpScopeOptions): Promise<UserXpTotal> {
-  logger.info(`Fetching XP permits for userId: ${userId}`);
+  logger.info(`Fetching XP records for userId: ${userId}`);
   const scope = buildScope(options);
   const totals = await collectTotals(logger, client, userId, scope);
   if (totals.permitCount === 0) {
-    logger.debug(`No XP permits found for userId: ${userId}`);
+    logger.debug(`No XP records found for userId: ${userId}`);
     return buildEmptyTotal(scope);
   }
   const normalized = totals.total.div(BASE_UNIT);
-  logger.ok(`XP permits fetched successfully for userId: ${userId}`);
+  logger.ok(`XP records fetched successfully for userId: ${userId}`);
   const result: UserXpTotal = {
     total: normalized.toNumber(),
     permitCount: totals.permitCount,
@@ -40,33 +41,34 @@ export async function fetchUserTotal(logger: Logger, client: SupabaseClient<Data
   return scope.enabled ? applyScopes(result, totals, scope) : result;
 }
 
-function normalizeLocation(location: PermitRow["locations"]): PermitLocation[] {
+function normalizeLocation(location: XpRecordRow["locations"]): XpRecordLocation[] {
   if (!location) {
     return [];
   }
   return Array.isArray(location) ? location.filter(Boolean) : [location];
 }
 
-async function fetchPermitPage(
+async function fetchRecordPage(
   logger: Logger,
   client: SupabaseClient<Database>,
+  table: XpRecordTable,
   userId: number,
   from: number,
   pageSize: number,
   includeScopeData: boolean
-): Promise<PermitRow[]> {
-  const permits = await client
-    .from("permits")
+): Promise<XpRecordRow[]> {
+  const records = await client
+    .from(table)
     .select(includeScopeData ? "amount,locations(node_url)" : "amount")
     .eq("beneficiary_id", userId)
     .range(from, from + pageSize - 1);
-  if (permits.error) {
-    throw logger.error("Failed to fetch XP permits from database", { permitsError: permits.error });
+  if (records.error) {
+    throw logger.error(`Failed to fetch XP records from ${table}`, { recordsError: records.error, table });
   }
-  return (permits.data ?? []) as unknown as PermitRow[];
+  return (records.data ?? []) as unknown as XpRecordRow[];
 }
 
-function accumulateTotals(rows: PermitRow[], scope: ScopeInfo): { total: Decimal; repo: Decimal; org: Decimal } {
+function accumulateTotals(rows: XpRecordRow[], scope: ScopeInfo): { total: Decimal; repo: Decimal; org: Decimal } {
   let total = new Decimal(0);
   let repo = new Decimal(0);
   let org = new Decimal(0);
@@ -90,20 +92,21 @@ function accumulateTotals(rows: PermitRow[], scope: ScopeInfo): { total: Decimal
   return { total, repo, org };
 }
 
-async function collectTotals(
+async function collectTableTotals(
   logger: Logger,
   client: SupabaseClient<Database>,
+  table: XpRecordTable,
   userId: number,
   scope: ScopeInfo
-): Promise<{ total: Decimal; repoTotal: Decimal; orgTotal: Decimal; permitCount: number }> {
+): Promise<{ total: Decimal; repoTotal: Decimal; orgTotal: Decimal; rowCount: number }> {
   const pageSize = 1000;
   let from = 0;
-  let permitCount = 0;
+  let rowCount = 0;
   let total = new Decimal(0);
   let repoTotal = new Decimal(0);
   let orgTotal = new Decimal(0);
   while (true) {
-    const rows = await fetchPermitPage(logger, client, userId, from, pageSize, scope.enabled);
+    const rows = await fetchRecordPage(logger, client, table, userId, from, pageSize, scope.enabled);
     if (rows.length === 0) {
       break;
     }
@@ -111,13 +114,31 @@ async function collectTotals(
     total = total.plus(pageTotals.total);
     repoTotal = repoTotal.plus(pageTotals.repo);
     orgTotal = orgTotal.plus(pageTotals.org);
-    permitCount += rows.length;
+    rowCount += rows.length;
     if (rows.length < pageSize) {
       break;
     }
     from += pageSize;
   }
-  return { total, repoTotal, orgTotal, permitCount };
+  return { total, repoTotal, orgTotal, rowCount };
+}
+
+async function collectTotals(
+  logger: Logger,
+  client: SupabaseClient<Database>,
+  userId: number,
+  scope: ScopeInfo
+): Promise<{ total: Decimal; repoTotal: Decimal; orgTotal: Decimal; permitCount: number }> {
+  const [permitTotals, penaltyTotals] = await Promise.all([
+    collectTableTotals(logger, client, "permits", userId, scope),
+    collectTableTotals(logger, client, "xp_penalties", userId, scope),
+  ]);
+  return {
+    total: permitTotals.total.plus(penaltyTotals.total),
+    repoTotal: permitTotals.repoTotal.plus(penaltyTotals.repoTotal),
+    orgTotal: permitTotals.orgTotal.plus(penaltyTotals.orgTotal),
+    permitCount: permitTotals.rowCount + penaltyTotals.rowCount,
+  };
 }
 
 function buildScope(options?: UserXpScopeOptions): ScopeInfo {
