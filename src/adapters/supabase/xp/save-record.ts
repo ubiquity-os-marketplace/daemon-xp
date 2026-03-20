@@ -43,20 +43,12 @@ type UpsertXpRecordInput = {
 };
 
 async function ensureBeneficiary(context: ContextPlugin, client: SupabaseClient<Database>, userId: number): Promise<number> {
-  const userLookup = await client.from("users").select("id").eq("id", userId).maybeSingle();
-  if (userLookup.error) {
-    throw context.logger.error("Failed to fetch user from database", { userLookupError: userLookup.error });
+  const userUpsert = await client.from("users").upsert({ id: userId }, { onConflict: "id" }).select("id").single();
+  if (userUpsert.error || !userUpsert.data) {
+    throw context.logger.error("Failed to ensure user exists in database", { userUpsertError: userUpsert.error });
   }
-  if (userLookup.data) {
-    return userLookup.data.id;
-  }
-  context.logger.info(`User with ID ${userId} not found in database. Attempting to create new user.`);
-  const userInsert = await client.from("users").insert({ id: userId }).select("id").single();
-  if (userInsert.error || !userInsert.data) {
-    throw context.logger.error("Failed to create user in database", { userInsertError: userInsert.error });
-  }
-  context.logger.ok(`Successfully created user with ID ${userId} in database.`);
-  return userInsert.data.id;
+  context.logger.ok(`User with ID ${userId} is ready in database.`);
+  return userUpsert.data.id;
 }
 
 async function upsertPermitRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
@@ -99,27 +91,14 @@ async function upsertPermitRecord(context: ContextPlugin, client: SupabaseClient
 
 async function upsertPenaltyRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
   const { beneficiaryId, locationId, amountString, issueId, userId } = input;
-  const penaltyLookup = await client.from("xp_penalties").select("id").eq("beneficiary_id", beneficiaryId).eq("location_id", locationId).maybeSingle();
-  if (penaltyLookup.error) {
-    throw context.logger.error("Error checking for duplicate XP penalty records", { penaltyLookupError: penaltyLookup.error });
-  }
-  if (penaltyLookup.data) {
-    context.logger.debug(`Existing XP penalty found for userId ${userId} on issue ${issueId}. Updating amount.`);
-    const penaltyUpdate = await client.from("xp_penalties").update({ amount: amountString }).eq("id", penaltyLookup.data.id);
-    if (penaltyUpdate.error) {
-      throw context.logger.error("Failed to update XP penalty in database", { penaltyUpdateError: penaltyUpdate.error });
-    }
-    context.logger.ok(`XP penalty updated successfully for userId: ${userId}, issueId: ${issueId}`);
-    return;
-  }
   const penaltyInsert: TablesInsert<"xp_penalties"> = {
     amount: amountString,
     beneficiary_id: beneficiaryId,
     location_id: locationId,
   };
-  const insertResult = await client.from("xp_penalties").insert(penaltyInsert);
-  if (insertResult.error) {
-    throw context.logger.error("Failed to insert XP penalty into database", { penaltyInsertError: insertResult.error });
+  const penaltyUpsert = await client.from("xp_penalties").upsert(penaltyInsert, { onConflict: "beneficiary_id,location_id" });
+  if (penaltyUpsert.error) {
+    throw context.logger.error("Failed to upsert XP penalty into database", { penaltyUpsertError: penaltyUpsert.error });
   }
-  context.logger.ok(`XP penalty inserted successfully for userId: ${userId}, issueId: ${issueId}`);
+  context.logger.ok(`XP penalty upserted successfully for userId: ${userId}, issueId: ${issueId}`);
 }

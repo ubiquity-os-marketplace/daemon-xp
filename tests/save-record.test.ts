@@ -35,6 +35,9 @@ type TableRows = {
 
 type TableName = keyof TableRows;
 type RowFilter = (row: Record<string, unknown>) => boolean;
+type UpsertOptions = {
+  onConflict?: string;
+};
 
 function matchesFilters(row: Record<string, unknown>, filters: RowFilter[]) {
   for (const filter of filters) {
@@ -52,6 +55,21 @@ function createInsertResult(inserted: Record<string, unknown>) {
     error: null,
     select: () => ({ single }),
   };
+}
+
+function getConflictColumns(options?: UpsertOptions) {
+  return (options?.onConflict ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function findConflictingRow(rows: Array<Record<string, unknown>>, payload: Record<string, unknown>, options?: UpsertOptions) {
+  const columns = getConflictColumns(options);
+  if (columns.length === 0) {
+    return undefined;
+  }
+  return rows.find((row) => columns.every((column) => row[column] === payload[column]));
 }
 
 function createContext() {
@@ -96,6 +114,19 @@ function createSupabaseClient(initialState: Partial<TableRows> = {}) {
             return { data: rows[0] ?? null, error: null };
           },
           insert: (payload: Record<string, unknown>) => {
+            const inserted = { ...payload } as Record<string, unknown>;
+            if (table === "permits" || table === "xp_penalties") {
+              inserted.id = nextIds[table]++;
+            }
+            state[table].push(inserted as never);
+            return createInsertResult(inserted);
+          },
+          upsert: (payload: Record<string, unknown>, options?: UpsertOptions) => {
+            const existing = findConflictingRow(state[table] as Array<Record<string, unknown>>, payload, options);
+            if (existing) {
+              Object.assign(existing, payload);
+              return createInsertResult(existing);
+            }
             const inserted = { ...payload } as Record<string, unknown>;
             if (table === "permits" || table === "xp_penalties") {
               inserted.id = nextIds[table]++;
