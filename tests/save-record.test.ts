@@ -49,7 +49,9 @@ function matchesFilters(row: Record<string, unknown>, filters: RowFilter[]) {
 }
 
 function createInsertResult(inserted: Record<string, unknown>) {
-  const single = async () => ({ data: inserted, error: null });
+  async function single() {
+    return { data: inserted, error: null };
+  }
   return {
     data: inserted,
     error: null,
