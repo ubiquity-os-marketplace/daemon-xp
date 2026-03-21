@@ -53,25 +53,6 @@ async function ensureBeneficiary(context: ContextPlugin, client: SupabaseClient<
 
 async function upsertPermitRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
   const { beneficiaryId, locationId, amountString, issueId, userId } = input;
-  const permitLookup = await client
-    .from("permits")
-    .select("id")
-    .eq("beneficiary_id", beneficiaryId)
-    .eq("location_id", locationId)
-    .is("token_id", null)
-    .maybeSingle();
-  if (permitLookup.error) {
-    throw context.logger.error("Error checking for duplicate XP permit records", { permitLookupError: permitLookup.error });
-  }
-  if (permitLookup.data) {
-    context.logger.debug(`Existing XP permit found for userId ${userId} on issue ${issueId}. Updating amount.`);
-    const permitUpdate = await client.from("permits").update({ amount: amountString }).eq("id", permitLookup.data.id);
-    if (permitUpdate.error) {
-      throw context.logger.error("Failed to update XP permit in database", { permitUpdateError: permitUpdate.error });
-    }
-    context.logger.ok(`XP permit updated successfully for userId: ${userId}, issueId: ${issueId}`);
-    return;
-  }
   const permitInsert: TablesInsert<"permits"> = {
     amount: amountString,
     beneficiary_id: beneficiaryId,
@@ -82,11 +63,11 @@ async function upsertPermitRecord(context: ContextPlugin, client: SupabaseClient
     signature: randomUUID(),
     partner_id: null,
   };
-  const insertResult = await client.from("permits").insert(permitInsert);
-  if (insertResult.error) {
-    throw context.logger.error("Failed to insert XP permit into database", { permitInsertError: insertResult.error });
+  const permitUpsert = await client.from("permits").upsert(permitInsert, { onConflict: "beneficiary_id,location_id" });
+  if (permitUpsert.error) {
+    throw context.logger.error("Failed to upsert XP permit into database", { permitUpsertError: permitUpsert.error });
   }
-  context.logger.ok(`XP permit inserted successfully for userId: ${userId}, issueId: ${issueId}`);
+  context.logger.ok(`XP permit upserted successfully for userId: ${userId}, issueId: ${issueId}`);
 }
 
 async function upsertPenaltyRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
