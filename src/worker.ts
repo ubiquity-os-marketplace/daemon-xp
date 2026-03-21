@@ -3,7 +3,7 @@ import { createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
-import { env } from "hono/adapter";
+import { env, env as honoEnv } from "hono/adapter";
 import manifest from "../manifest.json";
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
@@ -12,10 +12,7 @@ import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents }
 
 export default {
   async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
-    const runtimeEnv = {
-      ...env<Partial<Env>>(request as never),
-      ...(environment ?? {}),
-    };
+    const parsedEnv = env<Env>(request as never);
     const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
@@ -25,8 +22,8 @@ export default {
         envSchema: envSchema,
         postCommentOnError: true,
         settingsSchema: pluginSettingsSchema,
-        logLevel: (runtimeEnv.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-        kernelPublicKey: runtimeEnv.KERNEL_PUBLIC_KEY,
+        logLevel: (parsedEnv.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
+        kernelPublicKey: parsedEnv.KERNEL_PUBLIC_KEY,
         bypassSignatureVerification: process.env.NODE_ENV === "local",
       }
     );
@@ -35,6 +32,7 @@ export default {
       let validatedEnv: Env;
 
       try {
+        const runtimeEnv = honoEnv(ctx as unknown as Parameters<typeof honoEnv>[0]);
         validatedEnv = Value.Decode(envSchema, Value.Default(envSchema, runtimeEnv));
       } catch (error) {
         console.error("Invalid environment for /xp request", error);
