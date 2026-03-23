@@ -322,6 +322,23 @@ describe("Plugin tests", () => {
     expect(newComment?.body).toContain("global");
   });
 
+  it("Should post XP for users with penalty-only history", async () => {
+    const supabase = new SupabaseAdapterStub();
+    const commenterId = 1;
+    supabase.setUserTotal(commenterId, -6.5, 1);
+    const { context } = createIssueCommentContext({ supabaseAdapter: supabase, commentBody: "/xp", commenterId, octokit });
+    const commentCountBefore = db.issueComments.count();
+
+    await runPlugin(context);
+
+    expect(db.issueComments.count()).toBe(commentCountBefore + 1);
+    const issueComments = db.issueComments.getAll();
+    const newComment = issueComments[issueComments.length - 1];
+    expect(newComment?.body).toContain("### @");
+    expect(newComment?.body).toContain("`-6.5`");
+    expect(newComment?.body).not.toContain("I don't have XP data");
+  });
+
   it("Should post XP for /xp commands from PR review comments", async () => {
     const supabase = new SupabaseAdapterStub();
     const commenterId = 1;
@@ -422,6 +439,28 @@ describe("Plugin tests", () => {
     const payload = await response.json();
     expect(response.status).toBe(200);
     expect(payload).toEqual({ users: [{ login: "user1", id: 1, hasData: true, total: 12.5, permitCount: 3 }] });
+    expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
+  });
+
+  it("Should return XP data from the /xp endpoint for penalty-only users", async () => {
+    const fetchUserTotalMock = mock<FetchUserTotal>(async (...args: Parameters<FetchUserTotal>) => {
+      const [, , userId] = args;
+      if (userId === 1) {
+        return { total: -3.5, permitCount: 1 };
+      }
+      return { total: 0, permitCount: 0 };
+    });
+    overrideXpRequestDependencies({ getUserTotal: fetchUserTotalMock });
+    const worker = (await import("../src/worker")).default;
+
+    const response = await worker.fetch(new Request("http://localhost/xp?user=user1"), {
+      SUPABASE_URL: "https://supabase.test",
+      SUPABASE_KEY: "test-key",
+    } as Env);
+
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({ users: [{ login: "user1", id: 1, hasData: true, total: -3.5, permitCount: 1 }] });
     expect(fetchUserTotalMock).toHaveBeenCalledWith(expect.anything(), expect.anything(), 1);
   });
 
