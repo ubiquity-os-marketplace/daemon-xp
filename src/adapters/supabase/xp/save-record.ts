@@ -16,7 +16,7 @@ export async function saveXpRecord(context: ContextPlugin, client: SupabaseClien
   const locationId = await getOrCreateIssueLocation(context, client, issue);
   const amountString = new Decimal(numericAmount).mul(BASE_UNIT).toFixed();
   if (targetTable === "permits") {
-    await upsertPermitRecord(context, client, {
+    await insertPermitRecord(context, client, {
       beneficiaryId,
       locationId,
       amountString,
@@ -51,7 +51,7 @@ async function ensureBeneficiary(context: ContextPlugin, client: SupabaseClient<
   return userUpsert.data.id;
 }
 
-async function upsertPermitRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
+async function insertPermitRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
   const { beneficiaryId, locationId, amountString, issueId, userId } = input;
   const permitInsert: TablesInsert<"permits"> = {
     amount: amountString,
@@ -63,11 +63,11 @@ async function upsertPermitRecord(context: ContextPlugin, client: SupabaseClient
     signature: randomUUID(),
     partner_id: null,
   };
-  const permitUpsert = await client.from("permits").upsert(permitInsert, { onConflict: "beneficiary_id,location_id" });
-  if (permitUpsert.error) {
-    throw context.logger.error("Failed to upsert XP permit into database", { permitUpsertError: permitUpsert.error });
+  const permitInsertResult = await client.from("permits").insert(permitInsert);
+  if (permitInsertResult.error) {
+    throw context.logger.error("Failed to insert XP permit into database", { permitInsertError: permitInsertResult.error });
   }
-  context.logger.ok(`XP permit upserted successfully for userId: ${userId}, issueId: ${issueId}`);
+  context.logger.ok(`XP permit inserted successfully for userId: ${userId}, issueId: ${issueId}`);
 }
 
 async function upsertPenaltyRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
@@ -78,8 +78,48 @@ async function upsertPenaltyRecord(context: ContextPlugin, client: SupabaseClien
     location_id: locationId,
   };
   const penaltyUpsert = await client.from("xp_penalties").upsert(penaltyInsert, { onConflict: "beneficiary_id,location_id" });
+  if (isMissingConflictConstraintError(penaltyUpsert.error)) {
+    context.logger.info("xp_penalties is missing the conflict constraint. Falling back to lookup/update/insert for this write.", {
+      beneficiaryId,
+      locationId,
+      issueId,
+      userId,
+    });
+    await updateOrInsertPenaltyRecord(context, client, input);
+    return;
+  }
   if (penaltyUpsert.error) {
     throw context.logger.error("Failed to upsert XP penalty into database", { penaltyUpsertError: penaltyUpsert.error });
   }
   context.logger.ok(`XP penalty upserted successfully for userId: ${userId}, issueId: ${issueId}`);
+}
+
+async function updateOrInsertPenaltyRecord(context: ContextPlugin, client: SupabaseClient<Database>, input: UpsertXpRecordInput): Promise<void> {
+  const { beneficiaryId, locationId, amountString, issueId, userId } = input;
+  const penaltyLookup = await client.from("xp_penalties").select("id").eq("beneficiary_id", beneficiaryId).eq("location_id", locationId).maybeSingle();
+  if (penaltyLookup.error) {
+    throw context.logger.error("Error checking for duplicate XP penalty records", { penaltyLookupError: penaltyLookup.error });
+  }
+  if (penaltyLookup.data) {
+    const penaltyUpdate = await client.from("xp_penalties").update({ amount: amountString }).eq("id", penaltyLookup.data.id);
+    if (penaltyUpdate.error) {
+      throw context.logger.error("Failed to update XP penalty in database", { penaltyUpdateError: penaltyUpdate.error });
+    }
+    context.logger.ok(`XP penalty updated successfully for userId: ${userId}, issueId: ${issueId}`);
+    return;
+  }
+  const penaltyInsert: TablesInsert<"xp_penalties"> = {
+    amount: amountString,
+    beneficiary_id: beneficiaryId,
+    location_id: locationId,
+  };
+  const penaltyInsertResult = await client.from("xp_penalties").insert(penaltyInsert);
+  if (penaltyInsertResult.error) {
+    throw context.logger.error("Failed to insert XP penalty into database", { penaltyInsertError: penaltyInsertResult.error });
+  }
+  context.logger.ok(`XP penalty inserted successfully for userId: ${userId}, issueId: ${issueId}`);
+}
+
+function isMissingConflictConstraintError(error: { code?: string } | null): boolean {
+  return error?.code === "42P10";
 }

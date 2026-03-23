@@ -39,6 +39,15 @@ type UpsertOptions = {
   onConflict?: string;
 };
 
+type QueryError = {
+  code?: string;
+  message: string;
+};
+
+type ClientBehavior = {
+  upsertErrors?: Partial<Record<TableName, QueryError>>;
+};
+
 function matchesFilters(row: Record<string, unknown>, filters: RowFilter[]) {
   for (const filter of filters) {
     if (!filter(row)) {
@@ -85,7 +94,7 @@ function createContext() {
   } as unknown as Parameters<typeof saveXpRecord>[0];
 }
 
-function createSupabaseClient(initialState: Partial<TableRows> = {}) {
+function createSupabaseClient(initialState: Partial<TableRows> = {}, behavior: ClientBehavior = {}) {
   const state: TableRows = {
     users: [...(initialState.users ?? [])],
     permits: [...(initialState.permits ?? [])],
@@ -124,6 +133,13 @@ function createSupabaseClient(initialState: Partial<TableRows> = {}) {
             return createInsertResult(inserted);
           },
           upsert: (payload: Record<string, unknown>, options?: UpsertOptions) => {
+            const configuredError = behavior.upsertErrors?.[table];
+            if (configuredError) {
+              return {
+                data: null,
+                error: configuredError,
+              };
+            }
             const existing = findConflictingRow(state[table] as Array<Record<string, unknown>>, payload, options);
             if (existing) {
               Object.assign(existing, payload);
@@ -201,7 +217,7 @@ describe("saveXpRecord", () => {
     });
   });
 
-  it("updates an existing permit for the same user and issue location", async () => {
+  it("inserts a new permit even when the same user and issue location already exist", async () => {
     const { client, state } = createSupabaseClient({
       users: [{ id: 42 }],
       permits: [
@@ -226,8 +242,13 @@ describe("saveXpRecord", () => {
       numericAmount: 8,
     });
 
-    expect(state.permits).toHaveLength(1);
-    expect(state.permits[0]?.amount).toBe(toBaseUnitAmount(8));
+    expect(state.permits).toHaveLength(2);
+    expect(state.permits[0]?.amount).toBe(toBaseUnitAmount(1));
+    expect(state.permits[1]).toMatchObject({
+      amount: toBaseUnitAmount(8),
+      beneficiary_id: 42,
+      location_id: 77,
+    });
   });
 
   it("updates an existing penalty for the same user and issue location", async () => {
@@ -252,5 +273,39 @@ describe("saveXpRecord", () => {
 
     expect(state.xp_penalties).toHaveLength(1);
     expect(state.xp_penalties[0]?.amount).toBe(toBaseUnitAmount(-6.5));
+  });
+
+  it("falls back to lookup/update/insert when xp_penalties is missing the conflict constraint", async () => {
+    const { client, state } = createSupabaseClient(
+      {
+        users: [{ id: 42 }],
+        xp_penalties: [
+          {
+            id: 9,
+            amount: toBaseUnitAmount(-1),
+            beneficiary_id: 42,
+            location_id: 77,
+          },
+        ],
+      },
+      {
+        upsertErrors: {
+          xp_penalties: {
+            code: "42P10",
+            message: "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+          },
+        },
+      }
+    );
+    spyOn(locationAdapter, "getOrCreateIssueLocation").mockResolvedValue(77);
+
+    await saveXpRecord(createContext(), client, {
+      userId: 42,
+      issue: { issueId: 104, issueUrl: "https://github.com/ubiquity/test-repo/issues/104" },
+      numericAmount: -2.25,
+    });
+
+    expect(state.xp_penalties).toHaveLength(1);
+    expect(state.xp_penalties[0]?.amount).toBe(toBaseUnitAmount(-2.25));
   });
 });
