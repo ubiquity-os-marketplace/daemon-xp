@@ -5,6 +5,33 @@ import issueTemplate from "./issue-template";
  * Intercepts the routes and returns a custom payload
  */
 export const handlers = [
+  http.post("https://api.github.com/graphql", async ({ request }) => {
+    const payload = await getValue(request.body);
+    const variables = (payload as { variables?: { number?: number } } | undefined)?.variables;
+    const issueNumber = typeof variables?.number === "number" ? variables.number : 1;
+    const comments = db.issueComments.findMany({ where: { issue_number: { equals: issueNumber } } }) ?? [];
+
+    return HttpResponse.json({
+      data: {
+        repository: {
+          issueOrPullRequest: {
+            __typename: "PullRequest",
+            comments: {
+              nodes: comments.map((comment) => ({
+                id: String(comment.id),
+                body: comment.body,
+                isMinimized: false,
+                minimizedReason: null,
+                author: {
+                  login: comment.user?.login ?? null,
+                },
+              })),
+            },
+          },
+        },
+      },
+    });
+  }),
   // get org repos
   http.get("https://api.github.com/orgs/:org/repos", ({ params: { org } }: { params: { org: string } }) =>
     HttpResponse.json(db.repo.findMany({ where: { owner: { login: { equals: org } } } }))
