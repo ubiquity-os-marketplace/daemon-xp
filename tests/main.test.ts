@@ -2,7 +2,7 @@ import { drop } from "@mswjs/data";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { http, HttpResponse } from "msw";
-import manifest from "../manifest.json";
+import manifest from "../manifest.json" with { type: "json" };
 import { runPlugin } from "../src";
 import { filterCollaborators } from "../src/github/filter-collaborators";
 import { getInvolvedUsers } from "../src/github/get-involved-users";
