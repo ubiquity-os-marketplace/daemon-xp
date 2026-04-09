@@ -50,7 +50,7 @@ describe("Plugin tests", () => {
       SUPABASE_KEY: "test-key",
     } as Env);
     const content = await response.json();
-    expect(content).toEqual(manifest);
+    expect(content).toEqual({ ...manifest, homepage_url: "http://localhost" });
   });
 
   it("Should create a negative XP record when a disqualifier comment precedes the bot unassignment", async () => {
