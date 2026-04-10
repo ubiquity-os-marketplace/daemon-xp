@@ -22,10 +22,11 @@
   },
   "ubiquity:listeners": [
     "issues.unassigned",
+    "issue_comment.created",
     "pull_request_review_comment.created",
     "pull_request_review.submitted"
   ],
-  "skipBotEvents": false,
+  "skipBotEvents": true,
   "configuration": {
     "default": {},
     "type": "object",
@@ -41,5 +42,6 @@
         "type": "number"
       }
     }
-  }
+  },
+  "homepage_url": "https://daemon-xp-development.ubiquity-os.deno.net"
 }
