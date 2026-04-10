@@ -2,7 +2,7 @@ import { drop } from "@mswjs/data";
 import { customOctokit as Octokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { http, HttpResponse } from "msw";
-import manifest from "../manifest.json";
+import manifest from "../manifest.json" with { type: "json" };
 import { runPlugin } from "../src";
 import { filterCollaborators } from "../src/github/filter-collaborators";
 import { getInvolvedUsers } from "../src/github/get-involved-users";
@@ -50,7 +50,7 @@ describe("Plugin tests", () => {
       SUPABASE_KEY: "test-key",
     } as Env);
     const content = await response.json();
-    expect(content).toEqual(manifest);
+    expect(content).toEqual({ ...manifest, homepage_url: "http://localhost" });
   });
 
   it("Should create a negative XP record when a disqualifier comment precedes the bot unassignment", async () => {
