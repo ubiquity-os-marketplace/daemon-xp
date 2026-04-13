@@ -25,7 +25,11 @@ export default {
     if (new URL(request.url).pathname === "/manifest.json") {
       return Response.json(runtimeManifest);
     }
-    const environment = env<Env>(request as never);
+    const environment = env<Env>(request as never) as Env & {
+      KERNEL_PUBLIC_KEY?: string;
+      LOG_LEVEL?: string;
+      NODE_ENV?: string;
+    };
     const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
