@@ -20,12 +20,12 @@ function buildRuntimeManifest(request: Request) {
 }
 
 export default {
-  async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
+  async fetch(request: Request, serverInfo: Deno.ServeHandlerInfo, executionCtx?: ExecutionContext) {
     const runtimeManifest = buildRuntimeManifest(request);
     if (new URL(request.url).pathname === "/manifest.json") {
       return Response.json(runtimeManifest);
     }
-    const parsedEnv = env<Env>(request as never);
+    const environment = env<Env>(request as never);
     const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
@@ -35,9 +35,9 @@ export default {
         envSchema: envSchema,
         postCommentOnError: true,
         settingsSchema: pluginSettingsSchema,
-        logLevel: (parsedEnv.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-        kernelPublicKey: parsedEnv.KERNEL_PUBLIC_KEY,
-        bypassSignatureVerification: process.env.NODE_ENV === "local",
+        logLevel: (environment.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
+        kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
+        bypassSignatureVerification: environment.NODE_ENV === "local",
       }
     );
 
@@ -62,6 +62,6 @@ export default {
       return handleXpRequest(ctx.req.raw, validatedEnv);
     });
 
-    return plugin.fetch(request, environment, executionCtx);
+    return plugin.fetch(request, serverInfo, executionCtx);
   },
 };
