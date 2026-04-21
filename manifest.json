@@ -41,6 +41,5 @@
         "type": "number"
       }
     }
-  },
-  "homepage_url": "https://daemon-xp-main.deno.dev"
+  }
 }
