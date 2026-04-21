@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.1.1](https://github.com/ubiquity-os-marketplace/daemon-xp/compare/v1.1.0...v1.1.1) (2026-04-21)
+
+
+### Bug Fixes
+
+* adapt deno deploy entrypoint ([31bddce](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/31bddce9b64c67a2ea8a9aa506060888a3c74883))
+* added the proper homepage url i nthe manifest ([d5f4044](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/d5f404475d985a9f8eeb0dedb03ee655c8ef761d))
+* address non-transitive CI failures ([0c0d040](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/0c0d0401e3d958adc9293ff06362ab763db03e93))
+* address PR comment - make xp writes atomic ([db02498](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/db02498d48fe43805f4ae2a3185b0bef8f916e0d))
+* align deno worker env handling ([24440c6](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/24440c6f59fc3b60c993849abd048166ac5e2e19))
+* bump plugin-sdk for runtime manifest refs ([92e2148](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/92e2148fd4689066e8982efb5fb46adcdc1b69e6))
+* check in supabase generated types ([065a2b2](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/065a2b2319c6984269ac228d4dc2c65a7729019a))
+* pass explicit deno org ([c7ce18c](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/c7ce18cccc96af2d93c48cf6146942ae3cc35a35))
+* restore permit inserts and harden penalty upsert ([1b3c1f8](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/1b3c1f818f0e3b80375834e3f401adb70f2942b9))
+* revert worker env handling ([1fcac04](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/1fcac046cfb874280d22449cff8fe00f919aff3c))
+* route negative xp to penalties ([812bf97](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/812bf971fb9ddf81a34feacd4772d6d9e2fe3f2f))
+* route negative XP to xp_penalties ([5ccfc34](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/5ccfc3458ab0527f780037b81b6ce7b5149adc78))
+* simplify manifest preparation by removing unused env variables ([317424d](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/317424df2f4955539dbff54d456009471b93a294))
+* skip remote supabase generation without config ([b4d7f19](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/b4d7f19dc064ac55d8d791ed764f871023991da8))
+* stabilize xp check runs ([2e2e633](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/2e2e633d753e874689a5e7b4e378455077d5b732))
+* stabilize xp ci checks ([50e27d5](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/50e27d57bcf7428034e315d5e3e987246633cb23))
+* upload supabase generated types to deno ([fdb7034](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/fdb7034229c8c3a5cbd4ae6b325a13f1a2c43b73))
+* upsert permits atomically ([a2d80bf](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/a2d80bf78c9673630488516416d4ff46173005bb))
+* widen runtime env typing ([47d91b5](https://github.com/ubiquity-os-marketplace/daemon-xp/commit/47d91b5b208db886e4e8c896ff03c9e8c7c0cf4a))
+
 ## [1.1.0](https://github.com/ubiquity-os-marketplace/daemon-xp/compare/v1.0.0...v1.1.0) (2026-02-19)
 
 ### Features
