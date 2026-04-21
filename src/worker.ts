@@ -1,30 +1,47 @@
 import { Value } from "@sinclair/typebox/value";
 import { createPlugin } from "@ubiquity-os/plugin-sdk";
-import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
+import { Manifest, resolveRuntimeManifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import { env, env as honoEnv } from "hono/adapter";
-import manifest from "../manifest.json";
+import manifest from "../manifest.json" with { type: "json" };
 import { handleXpRequest } from "./http/xp/handle-xp-request";
 import { runPlugin } from "./index";
 import { Command } from "./types/command";
 import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types/index";
 
+function buildRuntimeManifest(request: Request) {
+  const runtimeManifest = resolveRuntimeManifest(manifest as Manifest);
+
+  return {
+    ...runtimeManifest,
+    homepage_url: new URL(request.url).origin,
+  };
+}
+
 export default {
-  async fetch(request: Request, environment: Env, executionCtx?: ExecutionContext) {
-    const parsedEnv = env<Env>(request as never);
+  async fetch(request: Request, serverInfo: Record<string, unknown>, executionCtx?: ExecutionContext) {
+    const runtimeManifest = buildRuntimeManifest(request);
+    if (new URL(request.url).pathname === "/manifest.json") {
+      return Response.json(runtimeManifest);
+    }
+    const environment = env<Env>(request as never) as Env & {
+      KERNEL_PUBLIC_KEY?: string;
+      LOG_LEVEL?: string;
+      NODE_ENV?: string;
+    };
     const plugin = createPlugin<PluginSettings, Env, Command, SupportedEvents>(
       (context) => {
         return runPlugin(context);
       },
-      manifest as Manifest,
+      runtimeManifest as Manifest,
       {
         envSchema: envSchema,
         postCommentOnError: true,
         settingsSchema: pluginSettingsSchema,
-        logLevel: (parsedEnv.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-        kernelPublicKey: parsedEnv.KERNEL_PUBLIC_KEY,
-        bypassSignatureVerification: process.env.NODE_ENV === "local",
+        logLevel: (environment.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
+        kernelPublicKey: environment.KERNEL_PUBLIC_KEY,
+        bypassSignatureVerification: (environment as Env & { NODE_ENV?: string }).NODE_ENV === "local",
       }
     );
 
@@ -49,6 +66,6 @@ export default {
       return handleXpRequest(ctx.req.raw, validatedEnv);
     });
 
-    return plugin.fetch(request, environment, executionCtx);
+    return plugin.fetch(request, serverInfo, executionCtx);
   },
 };
